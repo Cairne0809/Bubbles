@@ -1,59 +1,173 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Reflection;
-using System.Text;
-using System.Threading.Tasks;
-using MathX;
+using MathematicsX;
 
 namespace Bubbles
 {
 	public class Transform
 	{
-		object m_userData;
-		List<Transform> m_children;
 		Transform m_parent;
+		Transform[] m_children;
+		int m_childCount;
+		public int childCount { get { return m_childCount; } }
+
+		WorldObject m_worldObject;
+		public WorldObject worldObject { get { return m_worldObject; } }
+
+		Vec3 m_localPosition = Vec3.zero;
 		Vec3 m_position = Vec3.zero;
+		bool m_positionDirty = false;
+
+        Quat m_localRotation = Quat.identity;
 		Quat m_rotation = Quat.identity;
+		bool m_rotationDirty = false;
+		
+		internal Transform(WorldObject worldObject, int childCapacity)
+		{
+			m_children = new Transform[childCapacity];
+			m_worldObject = worldObject;
+		}
 
-		public object userData { get { return m_userData; } }
-
-		public int childrenCount { get { return m_children.Count; } }
-
-		public Vec3 localPosition { get { return m_position; } set { m_position = value; } }
+		void DirtPosition()
+		{
+			if (m_positionDirty) return;
+			m_positionDirty = true;
+			for (int i = 0; i < m_childCount; ++i)
+			{
+				m_children[i].DirtPosition();
+			}
+		}
+		public Vec3 localPosition
+		{
+			get
+			{
+				return m_localPosition;
+			}
+			set
+			{
+				m_localPosition = value;
+				if (m_parent == null) m_position = value;
+				DirtPosition();
+			}
+		}
 		public Vec3 position
 		{
 			get
 			{
-				if (m_parent == null) return m_position;
-				else return m_parent.position + m_position;
+				if (m_positionDirty && m_parent != null)
+				{
+					m_positionDirty = false;
+					m_position = m_parent.position + m_localPosition;
+				}
+				return m_position;
 			}
 			set
 			{
-				if (m_parent == null) m_position = value;
-				else m_position = value - m_parent.position;
+				m_position = value;
+				if (m_parent == null) m_localPosition = value;
+				else m_localPosition = value - m_parent.position;
+				DirtPosition();
 			}
 		}
 
-		public Quat localRotation { get { return m_rotation; } set { m_rotation = value; } }
+		void DirtRotation()
+		{
+			if (m_rotationDirty) return;
+			m_rotationDirty = true;
+			for (int i = 0; i < m_childCount; ++i)
+			{
+				m_children[i].DirtRotation();
+			}
+		}
+		public Quat localRotation
+		{
+			get
+			{
+				return m_localRotation;
+			}
+			set
+			{
+				m_localRotation = value;
+				if (m_parent == null) m_rotation = value;
+				DirtRotation();
+			}
+		}
 		public Quat rotation
 		{
 			get
 			{
-				if (m_parent == null) return m_rotation;
-				else return m_parent.rotation * m_rotation;
+				if (m_rotationDirty && m_parent != null)
+				{
+					m_rotationDirty = false;
+					m_rotation = m_parent.rotation * m_localRotation;
+				}
+				return m_rotation;
 			}
 			set
 			{
-				if (m_parent == null) m_rotation = value;
-				else m_rotation = value * ~m_parent.rotation;
+				m_rotation = value;
+				if (m_parent == null) m_localRotation = value;
+				else m_localRotation = value * ~m_parent.rotation;
+				DirtRotation();
 			}
 		}
 
-		public Transform(object userData, int childrenCapacity)
+		void OnAdd(Transform parent)
 		{
-			m_userData = userData;
-			m_children = new List<Transform>(childrenCapacity);
+			m_parent = parent;
+			position = m_position;
+			rotation = m_rotation;
+		}
+		void OnRemove()
+		{
+			m_localPosition = position;
+			m_localRotation = rotation;
+			m_parent = null;
+		}
+
+		void _Add(Transform child)
+		{
+			if (m_childCount ==  m_children.Length)
+			{
+				Array.Resize(ref m_children, m_childCount == 0 ? 1 : m_childCount * 2);
+			}
+			m_children[m_childCount++] = child;
+		}
+		bool _AddAt(int index, Transform child)
+		{
+			if (index < 0 || index > m_childCount) return false;
+			if (m_childCount == m_children.Length)
+			{
+				Array.Resize(ref m_children, m_childCount == 0 ? 1 : m_childCount * 2);
+			}
+			m_children[m_childCount] = child;
+			Move(m_childCount++, index);
+			return true;
+		}
+		bool _Remove(Transform child)
+		{
+			int index = Array.IndexOf(m_children, child);
+			if (index != -1)
+			{
+				m_children[index] = null;
+				Move(index, --m_childCount);
+				return true;
+			}
+			return false;
+		}
+		bool _RemoveAt(int index)
+		{
+			if (index < 0 || index >= m_childCount) return false;
+			m_children[index] = null;
+			Move(index, --m_childCount);
+			return true;
+		}
+		void _Clear()
+		{
+			for (int i = 0; i < m_childCount; ++i)
+			{
+				m_children[i] = null;
+			}
+			m_childCount = 0;
 		}
 
 		public Transform parent
@@ -67,79 +181,120 @@ namespace Bubbles
 				if (value == m_parent) return;
 				if (m_parent != null)
 				{
-					m_parent.Remove(this);
+					m_parent._Remove(this);
+					OnRemove();
 				}
 				if (value != null)
 				{
-					value.Add(this);
+					OnAdd(value);
+					m_parent._Add(this);
 				}
-				m_parent = value;
 			}
 		}
 
-		public Transform Get(int index)
+		public void Swap(int index1, int index2)
 		{
-			if (index < 0 || index >= m_children.Count) return null;
-			return m_children[index];
-		}
-		public int GetIndex(Transform child)
-		{
-			return m_children.IndexOf(child);
+			Transform temp = m_children[index1];
+			m_children[index1] = m_children[index2];
+			m_children[index2] = temp;
 		}
 
-		public void ForEach(Action<Transform> forEach)
+		public void Move(int from, int to)
 		{
-			m_children.ForEach(forEach);
+			Transform temp = m_children[from];
+			if (from < to)
+			{
+				for (; from < to; ++from)
+				{
+					m_children[from] = m_children[from + 1];
+				}
+			}
+			else if (from > to)
+			{
+				for (; from > to; --from)
+				{
+					m_children[from] = m_children[from - 1];
+				}
+			}
+			m_children[to] = temp;
 		}
 
-		
 		public bool AddAt(int index, Transform child)
 		{
-			if (index < 0 || index > m_children.Count || m_children.IndexOf(child) >= 0) return false;
-			m_children.Insert(index, child);
-			child.m_parent = this;
+			if (child == null || index < 0 || index > m_childCount) return false;
+			if (child.m_parent != null)
+			{
+				child.m_parent._Remove(child);
+				child.OnRemove();
+			}
+			_AddAt(index, child);
+			child.OnAdd(this);
 			return true;
 		}
 		public bool Add(Transform child)
 		{
-			return AddAt(m_children.Count, child);
+			if (child == null) return false;
+			if (child.m_parent != null)
+			{
+				child.m_parent._Remove(child);
+				child.OnRemove();
+			}
+			_Add(child);
+			child.OnAdd(this);
+			return true;
 		}
-
+		
+		public bool RemoveAt(int index)
+		{
+			if (index < 0 || index >= m_childCount) return false;
+			m_children[index].OnRemove();
+			_RemoveAt(index);
+			return true;
+		}
 		public bool Remove(Transform child)
 		{
-			if (m_children.Remove(child))
+			if (_Remove(child))
 			{
-				child.m_parent = null;
+				child.OnRemove();
 				return true;
 			}
 			return false;
 		}
-		public bool RemoveAt(int index)
+
+		public void RemoveAll()
 		{
-			if (index < 0 || index >= m_children.Count) return false;
-			m_children[index].m_parent = null;
-			m_children.RemoveAt(index);
-			return true;
+			foreach (Transform child in m_children)
+			{
+				child.OnRemove();
+			}
+			_Clear();
+		}
+		public void RemoveAll(Action<Transform> forEach)
+		{
+			foreach (Transform child in m_children)
+			{
+				forEach(child);
+				child.OnRemove();
+			}
+			_Clear();
 		}
 
-		public void RemoveAll(Action<Transform> forEach = null)
+		public Transform Get(int index)
 		{
-			if (forEach == null)
+			if (index < 0 || index >= m_childCount) return null;
+			return m_children[index];
+		}
+		public int GetIndex(Transform child)
+		{
+			return Array.IndexOf(m_children, child);
+		}
+
+		public void ForEach(Action<Transform> forEach)
+		{
+			foreach (Transform child in m_children)
 			{
-				m_children.ForEach((Transform child) =>
-				{
-					child.m_parent = null;
-				});
+				forEach(child);
 			}
-			else
-			{
-				m_children.ForEach((Transform child) =>
-				{
-					child.m_parent = null;
-					forEach(child);
-				});
-			}
-			m_children.Clear();
 		}
 
 	}

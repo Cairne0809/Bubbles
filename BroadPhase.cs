@@ -1,10 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using MathX;
-using System.Collections;
 
 namespace Bubbles
 {
@@ -13,8 +7,6 @@ namespace Bubbles
 		//pair定义
 		struct Pair : IComparable<Pair>
 		{
-			//链表的next指针
-			public int next;
 			//代理a
 			public int proxyIdA;
 			//代理b
@@ -83,10 +75,8 @@ namespace Bubbles
 			if (m_moveCount == m_moveCapacity)
 			{
 				//获取移动缓冲区
-				int[] old = m_moveBuffer;
 				m_moveCapacity *= 2;
-				m_moveBuffer = new int[m_moveCapacity];
-				Array.Copy(old, m_moveBuffer, old.Length);
+				Array.Resize(ref m_moveBuffer, m_moveCapacity);
 			}
 			//添加代理id到移动缓冲区中  
 			m_moveBuffer[m_moveCount] = proxyId;
@@ -119,10 +109,8 @@ namespace Bubbles
 			if (m_pairCount == m_pairCapacity)
 			{
 				//获取旧的pair缓冲区，并增加容量
-				Pair[] old = m_pairBuffer;
 				m_pairCapacity *= 2;
-				m_pairBuffer = new Pair[m_pairCapacity];
-				Array.Copy(old, m_pairBuffer, old.Length);
+				Array.Resize(ref m_pairBuffer, m_pairCapacity);
 			}
 			//设置最新的pair
 			//并自增pair数量
@@ -185,7 +173,7 @@ namespace Bubbles
 			//重置移动缓冲区
 			m_moveCount = 0;
 			// 排序pair缓冲区
-			Array.Sort<Pair>(m_pairBuffer);
+			Array.Sort(m_pairBuffer);
 			// 发送pair到客户端
 			int index = 0;
 			while (index < m_pairCount)

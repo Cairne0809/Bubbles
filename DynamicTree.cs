@@ -1,10 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Runtime.InteropServices;
-using System.Text;
-using System.Threading.Tasks;
-using MathX;
 
 namespace Bubbles
 {
@@ -70,10 +65,8 @@ namespace Bubbles
 			if (m_freeList == Node.NULL)
 			{
 				//空闲链表为空，重新创建一个更大的内存池
-				Node[] old = m_nodes;
 				m_nodeCapacity *= 2;
-				m_nodes = new Node[m_nodeCapacity];
-				Array.Copy(old, m_nodes, old.Length);
+				Array.Resize(ref m_nodes, m_nodeCapacity);
 				// 创建一个空闲链表。父节点成为下一个指针
 				// 注意:这次是从m_nodeCount开始的
 				for (int i = m_nodeCount; i < m_nodeCapacity; ++i)
@@ -580,7 +573,7 @@ namespace Bubbles
 		public void Query(Func<int, bool> QueryCallback, Bounds bounds)
 		{
 			//申请临时栈，根节点进栈
-			Stack<int> stack = new Stack<int>();
+			Stack<int> stack = new Stack<int>(m_nodeCount);
 			stack.Push(m_root);
 			//判断栈的个数
 			while (stack.Count > 0)
@@ -620,7 +613,7 @@ namespace Bubbles
 		public void RayCast(Func<int, double, double> RayCastCallback, RayCastInput input)
 		{
 			//创建一个临时栈，并将根节点进栈
-			Stack<int> stack = new Stack<int>();
+			Stack<int> stack = new Stack<int>(m_nodeCount);
 			stack.Push(m_root);
 			//栈不为空
 			while (stack.Count > 0)
