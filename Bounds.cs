@@ -31,27 +31,14 @@ namespace Bubbles
 			return radius + bounds.radius >= Vec3.Distance(center, bounds.center);
 		}
 
-		public bool IntersectRay(Ray ray)
-		{
-			Vec3 orig = ray.origin;
-			Vec3 dir = ray.direction;
-			Vec3 voc = center - orig;
-			double negB = voc * dir * -2;
-			double C = voc.sqrMagnitude - radius * radius;
-			double delta = negB * negB - 4 * C;
-			if (delta >= 0)
-			{
-				delta = Math.Sqrt(delta);
-				if (negB + delta >= 0) return true;
-			}
-			return false;
-		}
 		public bool IntersectRay(Ray ray, out double distance)
 		{
+			//SqrDistance(C, O+D*t) = R^2
+			//(D*D) * t^2 + (-2*OC*D) * t + (OC*OC-R^2) = 0
 			Vec3 orig = ray.origin;
 			Vec3 dir = ray.direction;
 			Vec3 voc = center - orig;
-			double negB = voc * dir * -2;
+			double negB = voc * dir * 2;
 			double C = voc.sqrMagnitude - radius * radius;
 			double delta = negB * negB - 4 * C;
 			if (delta >= 0)
@@ -82,8 +69,6 @@ namespace Bubbles
 			Vec3 p1 = lhs.center - vrl * (1 + rhs.radius / dist);
 			return new Bounds((p0 + p1) / 2, Vec3.Distance(p0, p1) / 2);
 		}
-
-		public static Bounds NaB { get { return new Bounds(Vec3.NaV, double.NaN); } }
 		
     }
 }

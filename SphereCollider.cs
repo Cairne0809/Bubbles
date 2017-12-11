@@ -2,13 +2,13 @@
 {
 	public class SphereCollider : Collider
 	{
-		double m_radius;
+		public double radius;
 
-		override public Bounds bounds { get { return new Bounds(transform.position, m_radius); } }
+		override public Bounds bounds { get { return new Bounds(transform.position, radius); } }
 
 		internal SphereCollider(World world, double radius) : base(world)
 		{
-			m_radius = radius;
+			this.radius = radius;
 		}
 
 		internal void OnCollision()

@@ -3,12 +3,12 @@ using MathematicsX;
 
 namespace Bubbles
 {
-	public class RigidBody : WorldObject
+	public class Body : WorldObject
     {
 		public Vec3 velocity;
 		public Vec3 angularVelocity;
 
-		internal RigidBody(World world) : base(world, 1)
+		internal Body(World world) : base(world, 1)
 		{
 
 		}
@@ -17,11 +17,12 @@ namespace Bubbles
 		{
 			if (velocity != Vec3.zero)
 			{
-				transform.position += velocity * deltaTime;
-				transform.ForEach((Transform child) =>
+				Vec3 dv = velocity * deltaTime;
+				transform.position += dv;
+				double delta = dv.magnitude;
+				transform.ForEachObject((Collider collider) =>
 				{
-					Collider collider = child.worldObject as Collider;
-					world.m_broadPhase.MoveProxy(collider.proxyId, collider.bounds);
+					world.m_broadPhase.MoveProxy(collider.proxyId, collider.bounds, delta);
 				});
 			}
 		}
@@ -34,19 +35,17 @@ namespace Bubbles
 			}
 			else
 			{
-				transform.RemoveAll((Transform child) =>
+				transform.ForEachObject((Collider collider) =>
 				{
-					(child.worldObject as Collider).Destroy();
+					collider.Destroy();
 				});
+				transform.RemoveAll();
 			}
 		}
 
 		public void ForEachCollider(Action<Collider> forEach)
 		{
-			transform.ForEach((Transform child) =>
-			{
-				forEach(child.worldObject as Collider);
-			});
+			transform.ForEachObject(forEach);
 		}
 
 		public void DestroyCollider(Collider collider)

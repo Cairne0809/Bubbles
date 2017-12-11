@@ -41,14 +41,10 @@ namespace Bubbles
 		int m_proxyCount;
 		//移动的缓冲区
 		int[] m_moveBuffer;
-		//移动缓冲区的总容量
-		int m_moveCapacity;
 		//需要移动的代理数量
 		int m_moveCount;
 		//pair缓冲区
 		Pair[] m_pairBuffer;
-		//pair缓冲区中的总容量
-		int m_pairCapacity;
 		//pair数量
 		int m_pairCount;
 		//查询代理id
@@ -60,23 +56,20 @@ namespace Bubbles
 
 			m_proxyCount = 0;
 
-			m_pairCapacity = 16;
 			m_pairCount = 0;
-			m_pairBuffer = new Pair[m_pairCapacity];
+			m_pairBuffer = new Pair[16];
 
-			m_moveCapacity = 16;
 			m_moveCount = 0;
-			m_moveBuffer = new int[m_moveCapacity];
+			m_moveBuffer = new int[16];
 		}
 
 		void BufferMove(int proxyId)
 		{
 			//移动缓冲区过小，增容
-			if (m_moveCount == m_moveCapacity)
+			if (m_moveCount == m_moveBuffer.Length)
 			{
 				//获取移动缓冲区
-				m_moveCapacity *= 2;
-				Array.Resize(ref m_moveBuffer, m_moveCapacity);
+				Array.Resize(ref m_moveBuffer, m_moveBuffer.Length * 2);
 			}
 			//添加代理id到移动缓冲区中  
 			m_moveBuffer[m_moveCount] = proxyId;
@@ -106,11 +99,10 @@ namespace Bubbles
 				return true;
 			}
 			// 如果需要增加pair缓冲区  
-			if (m_pairCount == m_pairCapacity)
+			if (m_pairCount == m_pairBuffer.Length)
 			{
 				//获取旧的pair缓冲区，并增加容量
-				m_pairCapacity *= 2;
-				Array.Resize(ref m_pairBuffer, m_pairCapacity);
+				Array.Resize(ref m_pairBuffer, m_pairBuffer.Length * 2);
 			}
 			//设置最新的pair
 			//并自增pair数量
@@ -139,9 +131,9 @@ namespace Bubbles
 			m_tree.DestroyProxy(proxyId);
 		}
 
-		public void MoveProxy(int proxyId, Bounds bounds)
+		public void MoveProxy(int proxyId, Bounds bounds, double delta)
 		{
-			bool buffer = m_tree.MoveProxy(proxyId, bounds);
+			bool buffer = m_tree.MoveProxy(proxyId, bounds, delta);
 			if (buffer)
 			{
 				BufferMove(proxyId);
@@ -153,7 +145,7 @@ namespace Bubbles
 			BufferMove(proxyId);
 		}
 
-		public void UpdatePairs(Action<object, object> AddPair)
+		public void UpdatePairs(Action<T, T> AddPair)
 		{
 			//重置pair缓存区
 			m_pairCount = 0;
@@ -166,7 +158,7 @@ namespace Bubbles
 					continue;
 				}
 				// 我们需要查询树的宽大的AABB，以便当我们创建pair失败时，可以再次创建
-				Bounds bb = m_tree.GetBounds(m_queryProxyId);
+				Bounds bb = m_tree.GetFatBounds(m_queryProxyId);
 				// 查询树，创建多个pair并将他们添加到pair缓冲区中
 				m_tree.Query(QueryCallback, bb);
 			}
@@ -181,8 +173,8 @@ namespace Bubbles
 				//在pair缓冲区中获取当前的pair
 				Pair primaryPair = m_pairBuffer[index];
 				//根据相交记录
-				object userDataA = m_tree.GetUserData(primaryPair.proxyIdA);
-				object userDataB = m_tree.GetUserData(primaryPair.proxyIdB);
+				T userDataA = m_tree.GetUserData(primaryPair.proxyIdA);
+				T userDataB = m_tree.GetUserData(primaryPair.proxyIdB);
 
 				AddPair(userDataA, userDataB);
 				++index;
@@ -200,12 +192,12 @@ namespace Bubbles
 			}
 		}
 
-		void Query(Func<int, bool> QueryCallback, Bounds bb)
+		internal void Query(Func<int, bool> QueryCallback, Bounds bounds)
 		{
-			m_tree.Query(QueryCallback, bb);
+			m_tree.Query(QueryCallback, bounds);
 		}
 
-		void Query(Func<int, double, double> RayCastCallback, RayCastInput input)
+		internal void RayCast(Func<int, double, double> RayCastCallback, RayCastInput input)
 		{
 			m_tree.RayCast(RayCastCallback, input);
 		}

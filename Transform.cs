@@ -263,18 +263,9 @@ namespace Bubbles
 
 		public void RemoveAll()
 		{
-			foreach (Transform child in m_children)
+			for (int i = 0; i < m_childCount; ++i)
 			{
-				child.OnRemove();
-			}
-			_Clear();
-		}
-		public void RemoveAll(Action<Transform> forEach)
-		{
-			foreach (Transform child in m_children)
-			{
-				forEach(child);
-				child.OnRemove();
+				m_children[i].OnRemove();
 			}
 			_Clear();
 		}
@@ -291,9 +282,27 @@ namespace Bubbles
 
 		public void ForEach(Action<Transform> forEach)
 		{
-			foreach (Transform child in m_children)
+			for (int i = 0; i < m_childCount; ++i)
 			{
-				forEach(child);
+				forEach(m_children[i]);
+			}
+		}
+		public void ForEachObject(Action<WorldObject> forEach)
+		{
+			for (int i = 0; i < m_childCount; ++i)
+			{
+				forEach(m_children[i].m_worldObject);
+			}
+		}
+		public void ForEachObject<T>(Action<T> forEach) where T : WorldObject
+		{
+			for (int i = 0; i < m_childCount; ++i)
+			{
+				T obj = m_children[i].m_worldObject as T;
+				if (obj != null)
+				{
+					forEach(obj);
+				}
 			}
 		}
 

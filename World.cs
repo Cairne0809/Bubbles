@@ -17,28 +17,36 @@ namespace Bubbles
 
 		public void Destroy()
 		{
-			m_root.RemoveAll((Transform child) =>
+			m_root.ForEachObject((Body body) =>
 			{
-				(child.worldObject as RigidBody).Destroy();
+				body.Destroy();
 			});
+			m_root.RemoveAll();
 		}
 
-		public void ForEachBody(Action<RigidBody> forEach)
+		public void ForEachAssistantBounds(Action<Bounds> forEach)
 		{
-			m_root.ForEach((Transform child) =>
-			{
-				forEach(child.worldObject as RigidBody);
-			});
+			m_tree.ForEachAssistantFatBounds(forEach);
 		}
 
-		public RigidBody CreateBody()
+		public void ForEachCollider(Action<Collider> forEach)
 		{
-			RigidBody body = new RigidBody(this);
+			m_tree.ForEachUserData(forEach);
+		}
+
+		public void ForEachBody(Action<Body> forEach)
+		{
+			m_root.ForEachObject(forEach);
+		}
+
+		public Body CreateBody()
+		{
+			Body body = new Body(this);
 			m_root.Add(body.transform);
 			return body;
 		}
 
-		public void DestroyBody(RigidBody body)
+		public void DestroyBody(Body body)
 		{
 			if (m_root.Remove(body.transform))
 			{
@@ -48,11 +56,26 @@ namespace Bubbles
 
 		public void Update(double deltaTime)
 		{
-			m_root.ForEach((Transform child) =>
+			m_root.ForEachObject((Body body) =>
 			{
-				RigidBody body = child.worldObject as RigidBody;
 				body.Update(deltaTime);
 			});
+		}
+
+		public void RayCastBounds(Func<Bounds, bool> RayCastCallback, RayCastInput input)
+		{
+			m_broadPhase.RayCast((int proxyId, double distance) =>
+			{
+				Bounds bounds = m_tree.GetFatBounds(proxyId);
+				if (RayCastCallback(bounds))
+				{
+					return input.maxDistance;
+				}
+				else
+				{
+					return -1;
+				}
+			}, input);
 		}
 
     }
