@@ -7,11 +7,12 @@ namespace Bubbles
 	{
 		Transform m_parent;
 		Transform[] m_children;
-		int m_childCount;
-		public int childCount { get { return m_childCount; } }
 
-		WorldObject m_worldObject;
+		public int childCount { get { return m_childCount; } }
+		int m_childCount;
+
 		public WorldObject worldObject { get { return m_worldObject; } }
+		WorldObject m_worldObject;
 
 		Vec3 m_localPosition = Vec3.zero;
 		Vec3 m_position = Vec3.zero;
@@ -140,7 +141,7 @@ namespace Bubbles
 				Array.Resize(ref m_children, m_childCount == 0 ? 1 : m_childCount * 2);
 			}
 			m_children[m_childCount] = child;
-			Move(m_childCount++, index);
+			MoveChild(m_childCount++, index);
 			return true;
 		}
 		bool _Remove(Transform child)
@@ -149,7 +150,7 @@ namespace Bubbles
 			if (index != -1)
 			{
 				m_children[index] = null;
-				Move(index, --m_childCount);
+				MoveChild(index, --m_childCount);
 				return true;
 			}
 			return false;
@@ -158,7 +159,7 @@ namespace Bubbles
 		{
 			if (index < 0 || index >= m_childCount) return false;
 			m_children[index] = null;
-			Move(index, --m_childCount);
+			MoveChild(index, --m_childCount);
 			return true;
 		}
 		void _Clear()
@@ -192,14 +193,14 @@ namespace Bubbles
 			}
 		}
 
-		public void Swap(int index1, int index2)
+		public void SwapChildren(int index1, int index2)
 		{
 			Transform temp = m_children[index1];
 			m_children[index1] = m_children[index2];
 			m_children[index2] = temp;
 		}
 
-		public void Move(int from, int to)
+		public void MoveChild(int from, int to)
 		{
 			Transform temp = m_children[from];
 			if (from < to)
@@ -219,7 +220,7 @@ namespace Bubbles
 			m_children[to] = temp;
 		}
 
-		public bool AddAt(int index, Transform child)
+		public bool AddChild(int index, Transform child)
 		{
 			if (child == null || index < 0 || index > m_childCount) return false;
 			if (child.m_parent != null)
@@ -231,7 +232,7 @@ namespace Bubbles
 			child.OnAdd(this);
 			return true;
 		}
-		public bool Add(Transform child)
+		public bool AddChild(Transform child)
 		{
 			if (child == null) return false;
 			if (child.m_parent != null)
@@ -243,15 +244,15 @@ namespace Bubbles
 			child.OnAdd(this);
 			return true;
 		}
-		
-		public bool RemoveAt(int index)
+
+		public bool RemoveChild(int index)
 		{
 			if (index < 0 || index >= m_childCount) return false;
 			m_children[index].OnRemove();
 			_RemoveAt(index);
 			return true;
 		}
-		public bool Remove(Transform child)
+		public bool RemoveChild(Transform child)
 		{
 			if (_Remove(child))
 			{
@@ -261,7 +262,7 @@ namespace Bubbles
 			return false;
 		}
 
-		public void RemoveAll()
+		public void RemoveAllChildren()
 		{
 			for (int i = 0; i < m_childCount; ++i)
 			{
@@ -270,31 +271,30 @@ namespace Bubbles
 			_Clear();
 		}
 
-		public Transform Get(int index)
+		public Transform GetChild(int index)
 		{
 			if (index < 0 || index >= m_childCount) return null;
 			return m_children[index];
 		}
-		public int GetIndex(Transform child)
+		public int GetChildIndex(Transform child)
 		{
 			return Array.IndexOf(m_children, child);
 		}
 
-		public void ForEach(Action<Transform> forEach)
+		public T GetObject<T>() where T : WorldObject
+		{
+			return m_worldObject as T;
+		}
+
+		public void ForEachChild(Action<Transform> forEach)
 		{
 			for (int i = 0; i < m_childCount; ++i)
 			{
 				forEach(m_children[i]);
 			}
 		}
-		public void ForEachObject(Action<WorldObject> forEach)
-		{
-			for (int i = 0; i < m_childCount; ++i)
-			{
-				forEach(m_children[i].m_worldObject);
-			}
-		}
-		public void ForEachObject<T>(Action<T> forEach) where T : WorldObject
+
+		public void ForEachChildObject<T>(Action<T> forEach) where T : WorldObject
 		{
 			for (int i = 0; i < m_childCount; ++i)
 			{

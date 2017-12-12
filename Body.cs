@@ -1,73 +1,62 @@
 ﻿using System;
 using MathematicsX;
+using Bubbles;
 
 namespace Bubbles
 {
-	public class Body : WorldObject
+	public class Body
     {
-		public Vec3 velocity;
-		public Vec3 angularVelocity;
+		internal int m_proxyId = -1;
+		internal Body m_next = null;
+		internal Body m_prev = null;
 
-		internal Body(World world) : base(world, 1)
+		public virtual double radius { get; set; }
+		public virtual Vec3 position { get; set; }
+		public virtual Quat rotation { get; set; }
+		public virtual Vec3 lineVelocity { get; set; }
+		public virtual Vec3 angularVelocity { get; set; }
+		public virtual Bounds bounds { get { return new Bounds(position, radius); } }
+
+		Vec3 m_trimPosition;
+
+		internal Body()
 		{
-
+			rotation = Quat.identity;
 		}
 
-		internal void Update(double deltaTime)
+		public Body Next()
 		{
-			if (velocity != Vec3.zero)
+			return m_next;
+		}
+
+		internal bool PrimaryUpdate(double deltaTime)
+		{
+			m_trimPosition = Vec3.zero;
+
+			if (deltaTime > 0 && lineVelocity != Vec3.zero)
 			{
-				Vec3 dv = velocity * deltaTime;
-				transform.position += dv;
-				double delta = dv.magnitude;
-				transform.ForEachObject((Collider collider) =>
-				{
-					world.m_broadPhase.MoveProxy(collider.proxyId, collider.bounds, delta);
-				});
+				position += lineVelocity * deltaTime;
+				return true;
 			}
+			return false;
 		}
 
-		public void Destroy()
+		internal void UpdatePair(Body other, bool jo)
 		{
-			if (transform.parent != null)
+			Vec3 delta = position - other.position;
+			if (delta == Vec3.zero) delta = Vec3.right * (jo ? 1 : -1);
+			double mul = (radius + other.radius) / delta.magnitude - 1;
+			m_trimPosition += delta * mul / 2;
+		}
+
+		internal bool FinalUpdate()
+		{
+			if (m_trimPosition != Vec3.zero)
 			{
-				world.DestroyBody(this);
+				position += m_trimPosition;
+				return true;
 			}
-			else
-			{
-				transform.ForEachObject((Collider collider) =>
-				{
-					collider.Destroy();
-				});
-				transform.RemoveAll();
-			}
-		}
-
-		public void ForEachCollider(Action<Collider> forEach)
-		{
-			transform.ForEachObject(forEach);
-		}
-
-		public void DestroyCollider(Collider collider)
-		{
-			if (transform.Remove(collider.transform))
-			{
-				world.m_broadPhase.DestroyProxy(collider.proxyId);
-				collider.Destroy();
-			}
-		}
-
-		public SphereCollider CreateSphereCollider(Vec3 offset, double radius)
-		{
-			SphereCollider sphere = new SphereCollider(world, radius);
-			sphere.transform.localPosition = offset;
-			transform.Add(sphere.transform);
-			sphere.proxyId = world.m_broadPhase.CreateProxy(sphere.bounds, sphere);
-			return sphere;
-		}
-		public SphereCollider CreateSphereCollider(double radius)
-		{
-			return CreateSphereCollider(Vec3.zero, radius);
+			return false;
 		}
 
     }

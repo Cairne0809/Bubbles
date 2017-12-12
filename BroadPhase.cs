@@ -14,22 +14,12 @@ namespace Bubbles
 
 			public int CompareTo(Pair other)
 			{
-				if (proxyIdA < other.proxyIdA)
+				int deltaA = proxyIdA - other.proxyIdA;
+				if (deltaA == 0)
 				{
-					return -1;
+					return proxyIdB - other.proxyIdB;
 				}
-				else if (proxyIdA > other.proxyIdA)
-				{
-					return 1;
-				}
-				else
-				{
-					if (proxyIdB < other.proxyIdB)
-					{
-						return -1;
-					}
-					return 1;
-				}
+				return deltaA;
 			}
 		}
 
@@ -37,8 +27,6 @@ namespace Bubbles
 
 		//动态树声明
 		DynamicTree<T> m_tree;
-		//代理数量
-		int m_proxyCount;
 		//移动的缓冲区
 		int[] m_moveBuffer;
 		//需要移动的代理数量
@@ -50,17 +38,15 @@ namespace Bubbles
 		//查询代理id
 		int m_queryProxyId;
 
-		public BroadPhase(DynamicTree<T> tree)
+		internal BroadPhase(DynamicTree<T> tree)
 		{
 			m_tree = tree;
 
-			m_proxyCount = 0;
+			m_moveCount = 0;
+			m_moveBuffer = new int[16];
 
 			m_pairCount = 0;
 			m_pairBuffer = new Pair[16];
-
-			m_moveCount = 0;
-			m_moveBuffer = new int[16];
 		}
 
 		void BufferMove(int proxyId)
@@ -91,6 +77,35 @@ namespace Bubbles
 			}
 		}
 
+		internal int CreateProxy(Bounds bounds, T userData)
+		{
+			//获取代理id
+			int proxyId = m_tree.CreateProxy(bounds, userData);
+			//添加代理到移动缓冲区中
+			BufferMove(proxyId);
+			return proxyId;
+		}
+
+		internal void DestroyProxy(int proxyId)
+		{
+			UnBufferMove(proxyId);
+			m_tree.DestroyProxy(proxyId);
+		}
+
+		internal void MoveProxy(int proxyId, Bounds bounds, double delta)
+		{
+			bool buffer = m_tree.MoveProxy(proxyId, bounds, delta);
+			if (buffer)
+			{
+				BufferMove(proxyId);
+			}
+		}
+
+		internal void TouchProxy(int proxyId)
+		{
+			BufferMove(proxyId);
+		}
+
 		bool QueryCallback(int proxyId)
 		{
 			// 一个代理不需要自己pair更新自己的pair  
@@ -113,39 +128,7 @@ namespace Bubbles
 			return true;
 		}
 
-		public int CreateProxy(Bounds bounds, T userData)
-		{
-			//获取代理id
-			int proxyId = m_tree.CreateProxy(bounds, userData);
-			//代理数量自增
-			++m_proxyCount;
-			//添加代理到移动缓冲区中
-			BufferMove(proxyId);
-			return proxyId;
-		}
-
-		public void DestroyProxy(int proxyId)
-		{
-			UnBufferMove(proxyId);
-			--m_proxyCount;
-			m_tree.DestroyProxy(proxyId);
-		}
-
-		public void MoveProxy(int proxyId, Bounds bounds, double delta)
-		{
-			bool buffer = m_tree.MoveProxy(proxyId, bounds, delta);
-			if (buffer)
-			{
-				BufferMove(proxyId);
-			}
-		}
-
-		public void TouchProxy(int proxyId)
-		{
-			BufferMove(proxyId);
-		}
-
-		public void UpdatePairs(Action<T, T> AddPair)
+		internal void UpdatePairs(Action<T, T> UpdatePairsCallback)
 		{
 			//重置pair缓存区
 			m_pairCount = 0;
@@ -158,9 +141,9 @@ namespace Bubbles
 					continue;
 				}
 				// 我们需要查询树的宽大的AABB，以便当我们创建pair失败时，可以再次创建
-				Bounds bb = m_tree.GetFatBounds(m_queryProxyId);
+				Bounds bounds = m_tree.GetBounds(m_queryProxyId);
 				// 查询树，创建多个pair并将他们添加到pair缓冲区中
-				m_tree.Query(QueryCallback, bb);
+				m_tree.Query(bounds, QueryCallback);
 			}
 			//重置移动缓冲区
 			m_moveCount = 0;
@@ -176,7 +159,7 @@ namespace Bubbles
 				T userDataA = m_tree.GetUserData(primaryPair.proxyIdA);
 				T userDataB = m_tree.GetUserData(primaryPair.proxyIdB);
 
-				AddPair(userDataA, userDataB);
+				UpdatePairsCallback(userDataA, userDataB);
 				++index;
 
 				//跳过重复的pair
@@ -192,14 +175,31 @@ namespace Bubbles
 			}
 		}
 
-		internal void Query(Func<int, bool> QueryCallback, Bounds bounds)
+		internal void Query(Bounds bounds, Func<int, bool> QueryCallback)
 		{
-			m_tree.Query(QueryCallback, bounds);
+			m_tree.Query(bounds, QueryCallback);
 		}
 
-		internal void RayCast(Func<int, double, double> RayCastCallback, RayCastInput input)
+		internal void RayCast(RayCastInput input, Func<int, double, double> RayCastCallback)
 		{
-			m_tree.RayCast(RayCastCallback, input);
+			m_tree.RayCast(input, RayCastCallback);
+		}
+
+		internal int RayCastClosest(RayCastInput input)
+		{
+			int closest = -1;
+			double min = input.maxDistance;
+			m_tree.RayCast(input, (int proxyId, double distance) =>
+			{
+				double absDistance = Math.Abs(distance);
+				if (absDistance <= min)
+				{
+					closest = proxyId;
+					min = absDistance;
+				}
+				return min;
+			});
+			return closest;
 		}
 
 	}

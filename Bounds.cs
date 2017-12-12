@@ -69,6 +69,8 @@ namespace Bubbles
 			Vec3 p1 = lhs.center - vrl * (1 + rhs.radius / dist);
 			return new Bounds((p0 + p1) / 2, Vec3.Distance(p0, p1) / 2);
 		}
+
+		public static Bounds NaB { get { return new Bounds(Vec3.NaV, double.NaN); } }
 		
     }
 }
