@@ -106,28 +106,6 @@ namespace Bubbles
 			BufferMove(proxyId);
 		}
 
-		bool QueryCallback(int proxyId)
-		{
-			// 一个代理不需要自己pair更新自己的pair  
-			if (proxyId == m_queryProxyId)
-			{
-				return true;
-			}
-			// 如果需要增加pair缓冲区  
-			if (m_pairCount == m_pairBuffer.Length)
-			{
-				//获取旧的pair缓冲区，并增加容量
-				Array.Resize(ref m_pairBuffer, m_pairBuffer.Length * 2);
-			}
-			//设置最新的pair
-			//并自增pair数量
-			m_pairBuffer[m_pairCount].proxyIdA = Math.Min(proxyId, m_queryProxyId);
-			m_pairBuffer[m_pairCount].proxyIdB = Math.Max(proxyId, m_queryProxyId);
-			++m_pairCount;
-
-			return true;
-		}
-
 		internal void UpdatePairs(Action<T, T> UpdatePairsCallback)
 		{
 			//重置pair缓存区
@@ -148,7 +126,7 @@ namespace Bubbles
 			//重置移动缓冲区
 			m_moveCount = 0;
 			// 排序pair缓冲区
-			Array.Sort(m_pairBuffer);
+			Array.Sort(m_pairBuffer, 0, m_pairCount);
 			// 发送pair到客户端
 			int index = 0;
 			while (index < m_pairCount)
@@ -173,6 +151,27 @@ namespace Bubbles
 					++index;
 				}
 			}
+		}
+		bool QueryCallback(int proxyId)
+		{
+			// 一个代理不需要自己pair更新自己的pair  
+			if (proxyId == m_queryProxyId)
+			{
+				return true;
+			}
+			// 如果需要增加pair缓冲区  
+			if (m_pairCount == m_pairBuffer.Length)
+			{
+				//获取旧的pair缓冲区，并增加容量
+				Array.Resize(ref m_pairBuffer, m_pairBuffer.Length * 2);
+			}
+			//设置最新的pair
+			//并自增pair数量
+			m_pairBuffer[m_pairCount].proxyIdA = Math.Min(proxyId, m_queryProxyId);
+			m_pairBuffer[m_pairCount].proxyIdB = Math.Max(proxyId, m_queryProxyId);
+			++m_pairCount;
+
+			return true;
 		}
 
 		internal void Query(Bounds bounds, Func<int, bool> QueryCallback)

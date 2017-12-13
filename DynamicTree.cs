@@ -38,6 +38,8 @@ namespace Bubbles
 		//空闲链表指针
 		int m_freeList;
 
+		public bool doBalance;
+
 		public DynamicTree()
 		{
 			m_root = Node.NULL;
@@ -54,6 +56,9 @@ namespace Bubbles
 			//链表的最后一个子节点的孩子指针、高度都置为初始值  
 			m_nodes[m_nodes.Length - 1].parent = Node.NULL;
 			m_freeList = 0;
+
+			//计算平衡树默认true
+			doBalance = true;
 		}
 
 		int AllocateNode()
@@ -185,7 +190,10 @@ namespace Bubbles
 			while (index != Node.NULL)
 			{
 				//平衡
-				index = Balance(index);
+				if (doBalance)
+				{
+					index = Balance(index);
+				}
 				//左右孩子节点
 				int child1 = m_nodes[index].child1;
 				int child2 = m_nodes[index].child2;
@@ -240,7 +248,10 @@ namespace Bubbles
 				while (index != Node.NULL)
 				{
 					//平衡  
-					index = Balance(index);
+					if (doBalance)
+					{
+						index = Balance(index);
+					}
 					//获取左右孩子  
 					int child1 = m_nodes[index].child1;
 					int child2 = m_nodes[index].child2;

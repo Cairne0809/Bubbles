@@ -14,6 +14,7 @@ namespace Bubbles
 		public World()
 		{
 			m_tree = new DynamicTree<Body>();
+			m_tree.doBalance = false;
 			m_broadPhase = new BroadPhase<Body>(m_tree);
 
 			m_bodyList = null;
@@ -33,11 +34,15 @@ namespace Bubbles
 			m_tree.ForEachAssistantFatBounds(forEach);
 		}
 
-		public void ForEachBody(Action<Body> forEach)
+		public void ForEachBody<T>(Action<T> forEach) where T : Body
 		{
-			for (Body body = m_bodyList; body != null; body = body.Next())
+			for (Body b = m_bodyList; b != null; b = b.Next())
 			{
-				forEach(body);
+				T body = b as T;
+				if (body != null)
+				{
+					forEach(body);
+				}
 			}
 		}
 
@@ -51,11 +56,29 @@ namespace Bubbles
 			return m_bodyCount;
 		}
 
-		public Body CreateBody()
+		public ParticleBody CreateParticleBody(BodyDef def)
 		{
-			Body body = new Body();
+			ParticleBody body = new ParticleBody(def);
+			InitiateBody(body);
+			return body;
+		}
+		public SphereBody CreateSphereBody(SphereBodyDef def)
+		{
+			SphereBody body = new SphereBody(def);
 			body.m_proxyId = m_broadPhase.CreateProxy(body.bounds, body);
+			InitiateBody(body);
+			return body;
+		}
+		public BoxBody CreateBoxBody(BoxBodyDef def)
+		{
+			BoxBody body = new BoxBody(def);
+			body.m_proxyId = m_broadPhase.CreateProxy(body.bounds, body);
+			InitiateBody(body);
+			return body;
+		}
 
+		void InitiateBody(Body body)
+		{
 			if (m_bodyList != null)
 			{
 				body.m_next = m_bodyList;
@@ -63,74 +86,116 @@ namespace Bubbles
 			}
 			m_bodyList = body;
 			m_bodyCount++;
-
-			return body;
 		}
 
 		public void DestroyBody(Body body)
 		{
-			if (body.m_proxyId == -1)
+			if (body.m_next != null || body.m_prev != null)
 			{
-				return;
-			}
+				if (body.m_proxyId != BroadPhase<Body>.NULL_PROXY)
+				{
+					m_broadPhase.DestroyProxy(body.m_proxyId);
+					body.m_proxyId = -1;
+				}
 
-			m_broadPhase.DestroyProxy(body.m_proxyId);
-			body.m_proxyId = -1;
-
-			if (m_bodyList == body)
-			{
-				m_bodyList = body.m_next;
+				if (m_bodyList == body)
+				{
+					m_bodyList = body.m_next;
+				}
+				if (body.m_next != null)
+				{
+					body.m_next.m_prev = body.m_prev;
+					body.m_next = null;
+				}
+				if (body.m_prev != null)
+				{
+					body.m_prev.m_next = body.m_next;
+					body.m_prev = null;
+				}
+				--m_bodyCount;
 			}
-			if (body.m_next != null)
-			{
-				body.m_next.m_prev = body.m_prev;
-				body.m_next = null;
-			}
-			if (body.m_prev != null)
-			{
-				body.m_prev.m_next = body.m_next;
-				body.m_prev = null;
-			}
-			--m_bodyCount;
 		}
 
 		public void Update(double deltaTime)
 		{
-			PrimaryUpdate(deltaTime);
-			m_broadPhase.UpdatePairs(UpdatePairsCallback);
-			FinalUpdate();
+			PrimaryUpdate(deltaTime, false);
+			for (int i = 0; i < 1; ++i)
+			{
+				FinalUpdate();
+			}
+		}
+		public void Update()
+		{
+			PrimaryUpdate(0, true);
+			for (int i = 0; i < 1; ++i)
+			{
+				FinalUpdate();
+			}
 		}
 
-		void PrimaryUpdate(double deltaTime)
+		public void WhenUpdatePairs(Action<Body, Body> Callback)
+		{
+			this.WhenUpdatePairsCallback = Callback;
+		}
+		Action<Body, Body> WhenUpdatePairsCallback;
+
+		void PrimaryUpdate(double deltaTime, bool imperative)
 		{
 			for (Body body = m_bodyList; body != null; body = body.Next())
 			{
-				Vec3 lastPosition = body.position;
-				if (body.PrimaryUpdate(deltaTime))
+				if (body is ParticleBody)
 				{
-					m_broadPhase.MoveProxy(body.m_proxyId, body.bounds, Vec3.Distance(body.position, lastPosition));
+					body.PrimaryUpdate(deltaTime);
+				}
+				else
+				{
+					if (body.PrimaryUpdate(deltaTime) || imperative)
+					{
+						m_broadPhase.MoveProxy(body.m_proxyId, body.bounds, 0);
+					}
+				}
+			}
+		}
+
+		void FinalUpdate()
+		{
+			m_broadPhase.UpdatePairs(UpdatePairsCallback);
+
+			for (Body body = m_bodyList; body != null; body = body.Next())
+			{
+				if (body is ParticleBody)
+				{
+					m_broadPhase.Query(body.bounds, (int proxyId) =>
+					{
+						Body other = m_tree.GetUserData(proxyId);
+						UpdatePairsCallback(body, other);
+						return true;
+					});
+					body.FinalUpdate();
+				}
+				else
+				{
+					if (body.FinalUpdate())
+					{
+						m_broadPhase.MoveProxy(body.m_proxyId, body.bounds, 0);
+					}
 				}
 			}
 		}
 
 		void UpdatePairsCallback(Body A, Body B)
 		{
-			if (Collisions.TestOverlap(A, B))
-			{
-				A.UpdatePair(B, true);
-				B.UpdatePair(A, false);
-			}
-		}
-
-		void FinalUpdate()
-		{
-			for (Body body = m_bodyList; body != null; body = body.Next())
-			{
-				if (body.FinalUpdate())
-				{
-					m_broadPhase.MoveProxy(body.m_proxyId, body.bounds, 0);
-				}
-			}
+			A.UpdatePair(B);
+			B.UpdatePair(A);
+			//if (Collisions.TestOverlap(A.bounds, B.bounds))
+			//{
+			//	A.UpdatePair(B);
+			//	B.UpdatePair(A);
+			//}
+			//if (WhenUpdatePairsCallback != null)
+			//{
+			//	WhenUpdatePairsCallback(A, B);
+			//}
 		}
 
 		public void QueryBounds(Bounds bounds, Func<Bounds, bool> QueryCallback)
