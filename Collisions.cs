@@ -14,98 +14,129 @@ namespace Bubbles
 			return Vec3.Distance(lhs.center, rhs.center) < lhs.radius + rhs.radius;
 		}
 
-
 		public static double Distance(Bounds lhs, Bounds rhs)
 		{
 			return Vec3.Distance(lhs.center, rhs.center) - lhs.radius - rhs.radius;
 		}
 
-		public static double Distance(Body lhs, Body rhs)
+		public static double CombineResilience(double lhs, double rhs)
 		{
-			return 0;
+			return (lhs + rhs) / 2;
 		}
 
-		public static void Collide(ParticleBody me, SphereBody other)
+		public static void Collide(Body subjectBody, Body objectBody)
 		{
-			double sumMass = me.mass + other.mass;
-			if (sumMass > 0)
+			if (subjectBody.mass + objectBody.mass > 0)
 			{
-				double mul;
-
-				Vec3 norm = me.position - other.position;
-				Vec3 meV = Vec3.Project(me.velocity, norm);
-				Vec3 otherV = Vec3.Project(other.velocity, norm);
-				double res = (me.resilience + other.resilience) / 2;
-				mul = other.mass / sumMass * (res + 1);
-				me.SetTrimVel((otherV - meV) * mul);
-
-				Vec3 delta = me.position - other.position;
-				double sqrMag = delta.sqrMagnitude;
-				if (sqrMag == 0)
+				if (subjectBody.shape is ParticleShape)
 				{
-					me.SetTrimPos(Body.GetBias());
+					if (objectBody.shape is SphereShape)
+					{
+						Collide_Particle_Sphere(subjectBody, objectBody, (SphereShape)objectBody.shape);
+					}
 				}
-				else
+				else if (subjectBody.shape is SphereShape)
 				{
-					mul = other.radius / sqrMag;
-					me.SetTrimPos(delta * mul);
+					if (objectBody.shape is ParticleShape)
+					{
+						Collide_Sphere_Particle(subjectBody, (SphereShape)subjectBody.shape, objectBody);
+					}
+					else if (objectBody.shape is SphereShape)
+					{
+						Collide_Sphere_Sphere(subjectBody, (SphereShape)subjectBody.shape, objectBody, (SphereShape)objectBody.shape);
+					}
 				}
 			}
 		}
 
-		public static void Collide(SphereBody me, ParticleBody other)
+		static void Collide_Particle_Sphere(Body s, Body o, SphereShape os)
 		{
-			double sumMass = me.mass + other.mass;
-			if (sumMass > 0)
+			if (Vec3.Distance(s.position, o.position) > os.radius)
 			{
-				double mul;
+				return;
+			}
 
-				Vec3 norm = me.position - other.position;
-				Vec3 meV = Vec3.Project(me.velocity, norm);
-				Vec3 otherV = Vec3.Project(other.velocity, norm);
-				double res = (me.resilience + other.resilience) / 2;
-				mul = other.mass / sumMass * (res + 1);
-				me.SetTrimVel((otherV - meV) * mul);
+			double mul;
 
-				//Vec3 delta = me.position - other.position;
-				//double sqrMag = delta.sqrMagnitude;
-				//if (sqrMag == 0)
+			//velocity
+			Vec3 norm = s.position - o.position;
+			Vec3 meV = Vec3.Project(s.velocity, norm);
+			Vec3 otherV = Vec3.Project(o.velocity, norm);
+			double resilience = CombineResilience(s.resilience, o.resilience);
+			mul = o.mass / (s.mass + o.mass) * (resilience + 1);
+			s.SetTrimVel((otherV - meV) * mul);
+
+			//position
+			Vec3 delta = s.position - o.position;
+			double sqrMag = delta.sqrMagnitude;
+			if (sqrMag == 0)
+			{
+				s.SetTrimPos(Body.GetBias());
+			}
+			else
+			{
+				mul = os.radius / sqrMag;
+				s.SetTrimPos(delta * mul);
+			}
+		}
+
+		static void Collide_Sphere_Particle(Body s, SphereShape ss, Body o)
+		{
+			if (Vec3.Distance(s.position, o.position) > ss.radius)
+			{
+				return;
+			}
+
+			double mul;
+
+			//velocity
+			Vec3 norm = s.position - o.position;
+			Vec3 meV = Vec3.Project(s.velocity, norm);
+			Vec3 otherV = Vec3.Project(o.velocity, norm);
+			double resilience = CombineResilience(s.resilience, o.resilience);
+			mul = o.mass / (s.mass + o.mass) * (resilience + 1);
+			s.SetTrimVel((otherV - meV) * mul);
+		}
+
+		static void Collide_Sphere_Sphere(Body s, SphereShape ss, Body o, SphereShape os)
+		{
+			if (Vec3.Distance(s.position, o.position) > ss.radius + os.radius)
+			{
+				return;
+			}
+
+			double mul;
+
+			//velocity
+			Vec3 normal = s.position - o.position;
+			Vec3 meV = Vec3.Project(s.velocity, normal);
+			Vec3 otherV = Vec3.Project(o.velocity, normal);
+			double resilience = CombineResilience(s.resilience, o.resilience);
+			mul = o.mass / (s.mass + o.mass) * (resilience + 1);
+			s.SetTrimVel((otherV - meV) * mul);
+
+			//position
+			Vec3 delta = s.position - o.position;
+			double sqrMag = delta.sqrMagnitude;
+			if (sqrMag == 0)
+			{
+				s.SetTrimPos(Body.GetBias());
+			}
+			else
+			{
+				//double meVelMag = s.velocity.magnitude;
+				//double otherVelMag = o.velocity.magnitude;
+				//double sumVelMag = meVelMag + otherVelMag;
+				//if (sumVelMag == 0)
 				//{
-				//	me.SetTrimPos(Body.GetBias());
+				//	mul = (ss.radius + os.radius) / sqrMag * meVelMag / sumVelMag;
 				//}
 				//else
 				//{
-				//	mul = me.radius / sqrMag;
-				//	me.SetTrimPos(delta * mul);
+				//	mul = (ss.radius + os.radius) / sqrMag;
 				//}
-			}
-		}
-
-		public static void Collide(SphereBody me, SphereBody other)
-		{
-			double sumMass = me.mass + other.mass;
-			if (sumMass > 0)
-			{
-				double mul;
-
-				Vec3 normal = me.position - other.position;
-				Vec3 meV = Vec3.Project(me.velocity, normal);
-				Vec3 otherV = Vec3.Project(other.velocity, normal);
-				double res = (me.resilience + other.resilience) / 2;
-				mul = other.mass / sumMass * (res + 1);
-				me.SetTrimVel((otherV - meV) * mul);
-
-				Vec3 delta = me.position - other.position;
-				double sqrMag = delta.sqrMagnitude;
-				if (sqrMag == 0)
-				{
-					me.SetTrimPos(Body.GetBias());
-				}
-				else
-				{
-					mul = (me.radius + other.radius) / sqrMag;
-					me.SetTrimPos(delta * mul);
-				}
+				mul = (ss.radius + os.radius) / sqrMag;
+				s.SetTrimPos(delta * mul);
 			}
 		}
 

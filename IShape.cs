@@ -6,11 +6,8 @@ using System.Threading.Tasks;
 
 namespace Bubbles
 {
-	public class Shape
+	public interface IShape
 	{
-		public virtual double GetBoundsRadius()
-		{
-			return 0;
-		}
+		double GetBoundsRadius();
 	}
 }

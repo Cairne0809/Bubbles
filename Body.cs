@@ -12,35 +12,34 @@ namespace Bubbles
 
 		public double mass { get; set; }
 		public double resilience { get; set; }
-		public virtual Vec3 position { get; set; }
-		public virtual Quat rotation { get; set; }
-		public virtual Vec3 velocity { get; set; }
-		public virtual Vec3 acceleration { get; set; }
-		public virtual Vec3 angularVelocity { get; set; }
-		public virtual Vec3 angularAcceleration { get; set; }
-		public virtual Bounds bounds { get { return new Bounds(); } }
+		public IShape shape { get; set; }
+		public Vec3 position { get; set; }
+		public Quat rotation { get; set; }
+		public Vec3 velocity { get; set; }
+		public Vec3 acceleration { get; set; }
+		public Vec3 angularVelocity { get; set; }
+		public Vec3 angularAcceleration { get; set; }
 
 		Vec3 m_trimPos;
 		Vec3 m_trimVel;
 
-		protected Body(BodyDef def)
+		internal Body(BodyDef def)
 		{
 			mass = def.mass;
 			resilience = def.resilience;
 			position = def.position;
 			rotation = def.rotation.sqrMagnitude == 0 ? Quat.identity : def.rotation;
-		}
-		protected Body(double mass, double resilience, Vec3 position, Quat rotation)
-		{
-			this.mass = mass;
-			this.resilience = resilience;
-			this.position = position;
-			this.rotation = rotation.sqrMagnitude == 0 ? Quat.identity : rotation;
+			shape = def.shape;
 		}
 
 		public Body Next()
 		{
 			return m_next;
+		}
+
+		public Bounds GetBounds()
+		{
+			return new Bounds(position, shape.GetBoundsRadius());
 		}
 
 		internal bool PrimaryUpdate(double deltaTime)
@@ -55,11 +54,6 @@ namespace Bubbles
 				}
 			}
 			return false;
-		}
-
-		internal virtual void UpdatePair(Body other)
-		{
-			
 		}
 
 		internal bool FinalUpdate()

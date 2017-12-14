@@ -8,5 +8,6 @@ namespace Bubbles
 		public double resilience;
 		public Vec3 position;
 		public Quat rotation;
+		public IShape shape;
 	}
 }

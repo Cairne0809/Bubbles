@@ -56,29 +56,13 @@ namespace Bubbles
 			return m_bodyCount;
 		}
 
-		public ParticleBody CreateParticleBody(BodyDef def)
+		public Body CreateBody(BodyDef def)
 		{
-			ParticleBody body = new ParticleBody(def);
-			InitiateBody(body);
-			return body;
-		}
-		public SphereBody CreateSphereBody(SphereBodyDef def)
-		{
-			SphereBody body = new SphereBody(def);
-			body.m_proxyId = m_broadPhase.CreateProxy(body.bounds, body);
-			InitiateBody(body);
-			return body;
-		}
-		public BoxBody CreateBoxBody(BoxBodyDef def)
-		{
-			BoxBody body = new BoxBody(def);
-			body.m_proxyId = m_broadPhase.CreateProxy(body.bounds, body);
-			InitiateBody(body);
-			return body;
-		}
-
-		void InitiateBody(Body body)
-		{
+			Body body = new Body(def);
+			if (!(body.shape is ParticleShape))
+			{
+				body.m_proxyId = m_broadPhase.CreateProxy(body.GetBounds(), body);
+			}
 			if (m_bodyList != null)
 			{
 				body.m_next = m_bodyList;
@@ -86,6 +70,7 @@ namespace Bubbles
 			}
 			m_bodyList = body;
 			m_bodyCount++;
+			return body;
 		}
 
 		public void DestroyBody(Body body)
@@ -143,7 +128,7 @@ namespace Bubbles
 		{
 			for (Body body = m_bodyList; body != null; body = body.Next())
 			{
-				if (body is ParticleBody)
+				if (body.shape is ParticleShape)
 				{
 					body.PrimaryUpdate(deltaTime);
 				}
@@ -151,7 +136,7 @@ namespace Bubbles
 				{
 					if (body.PrimaryUpdate(deltaTime) || imperative)
 					{
-						m_broadPhase.MoveProxy(body.m_proxyId, body.bounds, 0);
+						m_broadPhase.MoveProxy(body.m_proxyId, body.GetBounds(), 0);
 					}
 				}
 			}
@@ -163,9 +148,9 @@ namespace Bubbles
 
 			for (Body body = m_bodyList; body != null; body = body.Next())
 			{
-				if (body is ParticleBody)
+				if (body.shape is ParticleShape)
 				{
-					m_broadPhase.Query(body.bounds, (int proxyId) =>
+					m_broadPhase.Query(body.GetBounds(), (int proxyId) =>
 					{
 						Body other = m_tree.GetUserData(proxyId);
 						UpdatePairsCallback(body, other);
@@ -177,7 +162,7 @@ namespace Bubbles
 				{
 					if (body.FinalUpdate())
 					{
-						m_broadPhase.MoveProxy(body.m_proxyId, body.bounds, 0);
+						m_broadPhase.MoveProxy(body.m_proxyId, body.GetBounds(), 0);
 					}
 				}
 			}
@@ -185,17 +170,13 @@ namespace Bubbles
 
 		void UpdatePairsCallback(Body A, Body B)
 		{
-			A.UpdatePair(B);
-			B.UpdatePair(A);
-			//if (Collisions.TestOverlap(A.bounds, B.bounds))
-			//{
-			//	A.UpdatePair(B);
-			//	B.UpdatePair(A);
-			//}
-			//if (WhenUpdatePairsCallback != null)
-			//{
-			//	WhenUpdatePairsCallback(A, B);
-			//}
+			Collisions.Collide(A, B);
+			Collisions.Collide(B, A);
+
+			if (WhenUpdatePairsCallback != null)
+			{
+				WhenUpdatePairsCallback(A, B);
+			}
 		}
 
 		public void QueryBounds(Bounds bounds, Func<Bounds, bool> QueryCallback)
