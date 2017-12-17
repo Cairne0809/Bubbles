@@ -19,125 +19,83 @@ namespace Bubbles
 			return Vec3.Distance(lhs.center, rhs.center) - lhs.radius - rhs.radius;
 		}
 
-		public static double CombineResilience(double lhs, double rhs)
+		public static double CombineBounce(double lhs, double rhs)
 		{
 			return (lhs + rhs) / 2;
 		}
-
-		public static void Collide(Body subjectBody, Body objectBody)
+		public static double CombineFriction(double lhs, double rhs)
 		{
-			if (subjectBody.mass + objectBody.mass > 0)
+			return lhs * rhs;
+		}
+
+		public static void Collide(Body lhs, Body rhs)
+		{
+			if (lhs.mass + rhs.mass > 0)
 			{
-				if (subjectBody.shape is ParticleShape)
+				if (lhs.shape.IsSphere() && rhs.shape.IsSphere())
 				{
-					if (objectBody.shape is SphereShape)
-					{
-						Collide_Particle_Sphere(subjectBody, objectBody, (SphereShape)objectBody.shape);
-					}
+					Collide_Sphere_Sphere(lhs, lhs.shape.AsSphere(), rhs, rhs.shape.AsSphere());
 				}
-				else if (subjectBody.shape is SphereShape)
+				else if (lhs.shape.IsParticle() && rhs.shape.IsSphere())
 				{
-					if (objectBody.shape is ParticleShape)
-					{
-						Collide_Sphere_Particle(subjectBody, (SphereShape)subjectBody.shape, objectBody);
-					}
-					else if (objectBody.shape is SphereShape)
-					{
-						Collide_Sphere_Sphere(subjectBody, (SphereShape)subjectBody.shape, objectBody, (SphereShape)objectBody.shape);
-					}
+					Collide_Particle_Sphere(lhs, rhs, rhs.shape.AsSphere());
+				}
+				else if (lhs.shape.IsSphere() && rhs.shape.IsParticle())
+				{
+					Collide_Particle_Sphere(rhs, lhs, lhs.shape.AsSphere());
 				}
 			}
 		}
 
-		static void Collide_Particle_Sphere(Body s, Body o, SphereShape os)
+		static void CalculatePositionVelocity(Body lhs, Body rhs, Vec3 distanceNormal)
 		{
-			if (Vec3.Distance(s.position, o.position) > os.radius)
+			double bounceMul = CombineBounce(lhs.bounce, rhs.bounce) + 1;
+			Vec3 lhsVerticalVelocity = Vec3.Project(lhs.velocity, distanceNormal);
+			Vec3 rhsVerticalVelocity = Vec3.Project(rhs.velocity, distanceNormal);
+			if (lhs.isStatic)
 			{
-				return;
+				rhs.SetTrimPos(-distanceNormal);
+				rhs.SetTrimVel(-bounceMul * rhsVerticalVelocity);
 			}
-
-			double mul;
-
-			//velocity
-			Vec3 norm = s.position - o.position;
-			Vec3 meV = Vec3.Project(s.velocity, norm);
-			Vec3 otherV = Vec3.Project(o.velocity, norm);
-			double resilience = CombineResilience(s.resilience, o.resilience);
-			mul = o.mass / (s.mass + o.mass) * (resilience + 1);
-			s.SetTrimVel((otherV - meV) * mul);
-
-			//position
-			Vec3 delta = s.position - o.position;
-			double sqrMag = delta.sqrMagnitude;
-			if (sqrMag == 0)
+			else if (rhs.isStatic)
 			{
-				s.SetTrimPos(Body.GetBias());
+				lhs.SetTrimPos(distanceNormal);
+				lhs.SetTrimVel(-bounceMul * lhsVerticalVelocity);
 			}
 			else
 			{
-				mul = os.radius / sqrMag;
-				s.SetTrimPos(delta * mul);
+				double sumMass = lhs.mass + rhs.mass;
+				lhs.SetTrimPos(rhs.mass / sumMass * distanceNormal);
+				rhs.SetTrimPos(-lhs.mass / sumMass * distanceNormal);
+				lhs.SetTrimVel(bounceMul * rhs.mass / sumMass * (rhsVerticalVelocity - lhsVerticalVelocity));
+				rhs.SetTrimVel(bounceMul * lhs.mass / sumMass * (lhsVerticalVelocity - rhsVerticalVelocity));
 			}
 		}
 
-		static void Collide_Sphere_Particle(Body s, SphereShape ss, Body o)
+		static void Collide_Sphere_Sphere(Body lhs, SphereShape lhsShp, Body rhs, SphereShape rhsShp)
 		{
-			if (Vec3.Distance(s.position, o.position) > ss.radius)
+			if (Vec3.Distance(lhs.position, rhs.position) > lhsShp.radius + rhsShp.radius)
 			{
 				return;
 			}
-
-			double mul;
-
-			//velocity
-			Vec3 norm = s.position - o.position;
-			Vec3 meV = Vec3.Project(s.velocity, norm);
-			Vec3 otherV = Vec3.Project(o.velocity, norm);
-			double resilience = CombineResilience(s.resilience, o.resilience);
-			mul = o.mass / (s.mass + o.mass) * (resilience + 1);
-			s.SetTrimVel((otherV - meV) * mul);
+			
+			Vec3 distanceNormal = lhs.position - rhs.position;
+			if (distanceNormal.sqrMagnitude == 0) distanceNormal = Body.GetBias();
+			distanceNormal *= (lhsShp.radius + rhsShp.radius) / distanceNormal.magnitude - 1;
+			CalculatePositionVelocity(lhs, rhs, distanceNormal);
 		}
 
-		static void Collide_Sphere_Sphere(Body s, SphereShape ss, Body o, SphereShape os)
+		static void Collide_Particle_Sphere(Body lhs, Body rhs, SphereShape rhsShp)
 		{
-			if (Vec3.Distance(s.position, o.position) > ss.radius + os.radius)
+			if (Vec3.Distance(lhs.position, rhs.position) > rhsShp.radius)
 			{
 				return;
 			}
-
-			double mul;
-
-			//velocity
-			Vec3 normal = s.position - o.position;
-			Vec3 meV = Vec3.Project(s.velocity, normal);
-			Vec3 otherV = Vec3.Project(o.velocity, normal);
-			double resilience = CombineResilience(s.resilience, o.resilience);
-			mul = o.mass / (s.mass + o.mass) * (resilience + 1);
-			s.SetTrimVel((otherV - meV) * mul);
-
-			//position
-			Vec3 delta = s.position - o.position;
-			double sqrMag = delta.sqrMagnitude;
-			if (sqrMag == 0)
-			{
-				s.SetTrimPos(Body.GetBias());
-			}
-			else
-			{
-				//double meVelMag = s.velocity.magnitude;
-				//double otherVelMag = o.velocity.magnitude;
-				//double sumVelMag = meVelMag + otherVelMag;
-				//if (sumVelMag == 0)
-				//{
-				//	mul = (ss.radius + os.radius) / sqrMag * meVelMag / sumVelMag;
-				//}
-				//else
-				//{
-				//	mul = (ss.radius + os.radius) / sqrMag;
-				//}
-				mul = (ss.radius + os.radius) / sqrMag;
-				s.SetTrimPos(delta * mul);
-			}
+			
+			Vec3 distanceNormal = lhs.position - rhs.position;
+			if (distanceNormal.sqrMagnitude == 0) distanceNormal = Body.GetBias();
+			distanceNormal *= rhsShp.radius / distanceNormal.magnitude - 1;
+			CalculatePositionVelocity(lhs, rhs, distanceNormal);
 		}
 
 	}

@@ -2,7 +2,7 @@
 
 namespace Bubbles
 {
-	public struct BoxShape : IShape
+	public class BoxShape : Shape
 	{
 		public Vec3 extends;
 
@@ -14,11 +14,16 @@ namespace Bubbles
 			this.extends = extends;
 		}
 
-		public double GetBoundsRadius()
-		{
-			return extends.magnitude;
-		}
+		public override double GetBoundsRadius() { return extends.magnitude; }
 
+		public override bool IsParticle() { return false; }
+		public override bool IsSphere() { return false; }
+		public override bool IsBox() { return true; }
+
+		public override ParticleShape AsParticle() { return null; }
+		public override SphereShape AsSphere() { return null; }
+		public override BoxShape AsBox() { return this; }
+		
 		public Vec3[] GetVertices()
 		{
 			Vec3[] vertices = new Vec3[8];

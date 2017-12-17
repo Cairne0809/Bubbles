@@ -8,22 +8,30 @@ namespace Bubbles
 		DynamicTree<Body> m_tree;
 		internal BroadPhase<Body> m_broadPhase;
 
-		internal Body m_bodyList;
 		internal int m_bodyCount;
+		internal Body m_activeList;
+		internal Body m_inactiveList;
+		internal Body m_particleList;
 
 		public World()
 		{
 			m_tree = new DynamicTree<Body>();
-			m_tree.doBalance = false;
 			m_broadPhase = new BroadPhase<Body>(m_tree);
-
-			m_bodyList = null;
+			
 			m_bodyCount = 0;
 		}
 
 		public void Destroy()
 		{
-			for (Body body = m_bodyList; body != null; body = body.Next())
+			for (Body body = m_activeList; body != null; body = body.Next())
+			{
+				DestroyBody(body);
+			}
+			for (Body body = m_particleList; body != null; body = body.Next())
+			{
+				DestroyBody(body);
+			}
+			for (Body body = m_inactiveList; body != null; body = body.Next())
 			{
 				DestroyBody(body);
 			}
@@ -34,21 +42,20 @@ namespace Bubbles
 			m_tree.ForEachAssistantFatBounds(forEach);
 		}
 
-		public void ForEachBody<T>(Action<T> forEach) where T : Body
+		public void ForEachBody(Action<Body> forEach)
 		{
-			for (Body b = m_bodyList; b != null; b = b.Next())
+			for (Body b = m_activeList; b != null; b = b.Next())
 			{
-				T body = b as T;
-				if (body != null)
-				{
-					forEach(body);
-				}
+				forEach(b);
 			}
-		}
-
-		public Body GetBodyList()
-		{
-			return m_bodyList;
+			for (Body b = m_particleList; b != null; b = b.Next())
+			{
+				forEach(b);
+			}
+			for (Body b = m_inactiveList; b != null; b = b.Next())
+			{
+				forEach(b);
+			}
 		}
 
 		public int GetBodyCount()
@@ -59,16 +66,15 @@ namespace Bubbles
 		public Body CreateBody(BodyDef def)
 		{
 			Body body = new Body(def);
-			if (!(body.shape is ParticleShape))
+			if (body.shape.IsParticle())
 			{
+				body.AddToList(ref m_particleList);
+			}
+			else
+			{
+				body.AddToList(ref m_activeList);
 				body.m_proxyId = m_broadPhase.CreateProxy(body.GetBounds(), body);
 			}
-			if (m_bodyList != null)
-			{
-				body.m_next = m_bodyList;
-				m_bodyList.m_prev = body;
-			}
-			m_bodyList = body;
 			m_bodyCount++;
 			return body;
 		}
@@ -77,27 +83,58 @@ namespace Bubbles
 		{
 			if (body.m_next != null || body.m_prev != null)
 			{
+				if (body.isAsleep || body.isStatic)
+				{
+					body.RemoveFromList(ref m_inactiveList);
+				}
+				else
+				{
+					if (body.shape.IsParticle())
+					{
+						body.RemoveFromList(ref m_particleList);
+					}
+					else
+					{
+						body.RemoveFromList(ref m_activeList);
+					}
+				}
 				if (body.m_proxyId != BroadPhase<Body>.NULL_PROXY)
 				{
 					m_broadPhase.DestroyProxy(body.m_proxyId);
-					body.m_proxyId = -1;
-				}
-
-				if (m_bodyList == body)
-				{
-					m_bodyList = body.m_next;
-				}
-				if (body.m_next != null)
-				{
-					body.m_next.m_prev = body.m_prev;
-					body.m_next = null;
-				}
-				if (body.m_prev != null)
-				{
-					body.m_prev.m_next = body.m_next;
-					body.m_prev = null;
+					body.m_proxyId = BroadPhase<Body>.NULL_PROXY;
 				}
 				--m_bodyCount;
+			}
+		}
+
+		public void MakeStatic(Body body, bool b)
+		{
+			if (body.m_isStatic == b) return;
+			body.m_isStatic = b;
+			if (b)
+			{
+				body.m_isAsleep = true;
+				if (body.shape.IsParticle())
+				{
+					body.RemoveFromList(ref m_particleList);
+				}
+				else
+				{
+					body.RemoveFromList(ref m_activeList);
+				}
+				body.AddToList(ref m_inactiveList);
+			}
+			else
+			{
+				body.RemoveFromList(ref m_inactiveList);
+				if (body.shape.IsParticle())
+				{
+					body.AddToList(ref m_particleList);
+				}
+				else
+				{
+					body.AddToList(ref m_activeList);
+				}
 			}
 		}
 
@@ -126,19 +163,16 @@ namespace Bubbles
 
 		void PrimaryUpdate(double deltaTime, bool imperative)
 		{
-			for (Body body = m_bodyList; body != null; body = body.Next())
+			for (Body body = m_activeList; body != null; body = body.Next())
 			{
-				if (body.shape is ParticleShape)
+				if (body.PrimaryUpdate(deltaTime) || imperative)
 				{
-					body.PrimaryUpdate(deltaTime);
+					m_broadPhase.MoveProxy(body.m_proxyId, body.GetBounds(), 0);
 				}
-				else
-				{
-					if (body.PrimaryUpdate(deltaTime) || imperative)
-					{
-						m_broadPhase.MoveProxy(body.m_proxyId, body.GetBounds(), 0);
-					}
-				}
+			}
+			for (Body body = m_particleList; body != null; body = body.Next())
+			{
+				body.PrimaryUpdate(deltaTime);
 			}
 		}
 
@@ -146,37 +180,30 @@ namespace Bubbles
 		{
 			m_broadPhase.UpdatePairs(UpdatePairsCallback);
 
-			for (Body body = m_bodyList; body != null; body = body.Next())
+			for (Body body = m_activeList; body != null; body = body.Next())
 			{
-				if (body.shape is ParticleShape)
+				if (body.FinalUpdate())
 				{
-					m_broadPhase.Query(body.GetBounds(), (int proxyId) =>
-					{
-						Body other = m_tree.GetUserData(proxyId);
-						UpdatePairsCallback(body, other);
-						return true;
-					});
-					body.FinalUpdate();
+					m_broadPhase.MoveProxy(body.m_proxyId, body.GetBounds(), 0);
 				}
-				else
+			}
+			for (Body body = m_particleList; body != null; body = body.Next())
+			{
+				m_broadPhase.Query(body.GetBounds(), (int proxyId) =>
 				{
-					if (body.FinalUpdate())
-					{
-						m_broadPhase.MoveProxy(body.m_proxyId, body.GetBounds(), 0);
-					}
-				}
+					Body other = m_tree.GetUserData(proxyId);
+					UpdatePairsCallback(body, other);
+					return true;
+				});
+				body.FinalUpdate();
 			}
 		}
 
 		void UpdatePairsCallback(Body A, Body B)
 		{
 			Collisions.Collide(A, B);
-			Collisions.Collide(B, A);
 
-			if (WhenUpdatePairsCallback != null)
-			{
-				WhenUpdatePairsCallback(A, B);
-			}
+			WhenUpdatePairsCallback?.Invoke(A, B);
 		}
 
 		public void QueryBounds(Bounds bounds, Func<Bounds, bool> QueryCallback)
@@ -184,14 +211,7 @@ namespace Bubbles
 			m_broadPhase.Query(bounds, (int proxyId) =>
 			{
 				Bounds other = m_tree.GetBounds(proxyId);
-				if (QueryCallback(other))
-				{
-					return true;
-				}
-				else
-				{
-					return false;
-				}
+				return QueryCallback(other);
 			});
 		}
 		public void RayCastBounds(RayCastInput input, Func<Bounds, bool> RayCastCallback)

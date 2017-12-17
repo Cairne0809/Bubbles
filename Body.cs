@@ -1,6 +1,4 @@
-﻿using System;
-using MathematicsX;
-using Bubbles;
+﻿using MathematicsX;
 
 namespace Bubbles
 {
@@ -9,24 +7,32 @@ namespace Bubbles
 		internal int m_proxyId = -1;
 		internal Body m_next = null;
 		internal Body m_prev = null;
+		
+		internal bool m_isStatic = false;
+		internal bool m_isAsleep = false;
 
 		public double mass { get; set; }
-		public double resilience { get; set; }
-		public IShape shape { get; set; }
+		public double bounce { get; set; }
+		public double friction { get; set; }
+		public Shape shape { get; set; }
+
+		public bool isStatic { get { return m_isStatic; } }
+		public bool isAsleep { get { return m_isAsleep; } }
 		public Vec3 position { get; set; }
 		public Quat rotation { get; set; }
 		public Vec3 velocity { get; set; }
 		public Vec3 acceleration { get; set; }
 		public Vec3 angularVelocity { get; set; }
 		public Vec3 angularAcceleration { get; set; }
-
+		
 		Vec3 m_trimPos;
 		Vec3 m_trimVel;
 
 		internal Body(BodyDef def)
 		{
 			mass = def.mass;
-			resilience = def.resilience;
+			bounce = def.bounce;
+			friction = def.friction;
 			position = def.position;
 			rotation = def.rotation.sqrMagnitude == 0 ? Quat.identity : def.rotation;
 			shape = def.shape;
@@ -42,6 +48,32 @@ namespace Bubbles
 			return new Bounds(position, shape.GetBoundsRadius());
 		}
 
+		internal void AddToList(ref Body list)
+		{
+			if (list != null)
+			{
+				m_next = list;
+				list.m_prev = this;
+			}
+			list = this;
+		}
+		internal void RemoveFromList(ref Body list)
+		{
+			if (list == this)
+			{
+				list = m_next;
+			}
+			if (m_next != null)
+			{
+				m_next.m_prev = m_prev;
+			}
+			if (m_prev != null)
+			{
+				m_prev.m_next = m_next;
+			}
+			m_prev = m_next = null;
+		}
+
 		internal bool PrimaryUpdate(double deltaTime)
 		{
 			if (deltaTime > 0)
@@ -50,9 +82,12 @@ namespace Bubbles
 				if (velocity.sqrMagnitude > 0)
 				{
 					position += velocity * deltaTime;
+					//position += Relativity.Velocity(velocity) * deltaTime;
+					acceleration = Vec3.zero;
 					return true;
 				}
 			}
+			acceleration = Vec3.zero;
 			return false;
 		}
 
