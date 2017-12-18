@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using MathematicsX;
 
 namespace Bubbles
 {
@@ -122,21 +123,16 @@ namespace Bubbles
 				int child2 = m_nodes[index].child2;
 
 				//选出合并包围球最小的一对
-				Bounds[] bbs = new Bounds[3];
-				bbs[0] = m_nodes[index].bounds;
-				bbs[1] = m_nodes[child1].bounds + m_nodes[leaf].bounds;
-				bbs[2] = m_nodes[child2].bounds + m_nodes[leaf].bounds;
-				int min = 0;
-				min = bbs[min].radius < bbs[1].radius ? min : 1;
-				min = bbs[min].radius < bbs[2].radius ? min : 2;
+				double r0 = m_nodes[index].bounds.radius;
+				double r1 = (m_nodes[child1].bounds + m_nodes[leaf].bounds).radius;
+				double r2 = (m_nodes[child2].bounds + m_nodes[leaf].bounds).radius;
+				int minI = MathX.MinI(r0, r1, r2);
 
-				// 获取最小成本
-				if (min == 0)
+				if (minI == 0)
 				{
 					break;
 				}
-				//下降到最小cost
-				if (min == 1)
+				if (minI == 1)
 				{
 					index = child1;
 				}

@@ -107,19 +107,12 @@ namespace Bubbles
 			return false;
 		}
 
-		internal void SetTrimVel(Vec3 trim)
+		internal void SetTrim(Vec3 trimPos, Vec3 trimVel)
 		{
-			if (trim.sqrMagnitude > m_trimVel.sqrMagnitude)
+			if (trimPos.sqrMagnitude > m_trimPos.sqrMagnitude)
 			{
-				m_trimVel = trim;
-			}
-		}
-
-		internal void SetTrimPos(Vec3 trim)
-		{
-			if (trim.sqrMagnitude > m_trimPos.sqrMagnitude)
-			{
-				m_trimPos = trim;
+				m_trimPos = trimPos;
+				m_trimVel = trimVel;
 			}
 		}
 

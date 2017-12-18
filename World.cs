@@ -203,7 +203,8 @@ namespace Bubbles
 		{
 			Collisions.Collide(A, B);
 
-			WhenUpdatePairsCallback?.Invoke(A, B);
+			if (WhenUpdatePairsCallback != null)
+				WhenUpdatePairsCallback(A, B);
 		}
 
 		public void QueryBounds(Bounds bounds, Func<Bounds, bool> QueryCallback)

@@ -4,10 +4,12 @@ namespace Bubbles
 {
 	public class BoxShape : Shape
 	{
-		public Vec3 extends;
+		Vec3 m_extends;
 
-		public Vec3 max { get { return extends.abs; } }
-		public Vec3 min { get { return -extends.abs; } }
+		public Vec3 extends { get { return m_extends; } set { m_extends = value.abs; } }
+
+		public Vec3 max { get { return m_extends; } }
+		public Vec3 min { get { return -m_extends; } }
 
 		public BoxShape(Vec3 extends)
 		{
