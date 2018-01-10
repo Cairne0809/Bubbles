@@ -20,6 +20,7 @@ namespace Bubbles
 		public bool isAsleep { get { return m_isAsleep; } }
 		public Vec3 position { get; set; }
 		public Quat rotation { get; set; }
+		public Vec3 eulerAngles { get { return Quat.ToEuler(rotation); } set { rotation = Quat.FromEuler(value); } }
 		public Vec3 velocity { get; set; }
 		public Vec3 acceleration { get; set; }
 		public Vec3 angularVelocity { get; set; }

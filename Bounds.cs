@@ -16,6 +16,22 @@ namespace Bubbles
 
 		public bool isNaB { get { return center.isNaV || double.IsNaN(radius); } }
 
+		public double GetValue()
+		{
+			return radius;
+		}
+
+		public Bounds Combine(Bounds bounds)
+		{
+			Vec3 vrl = center - bounds.center;
+			double dist = vrl.magnitude;
+			if (radius >= dist + bounds.radius) return this;
+			if (bounds.radius >= dist + radius) return bounds;
+			Vec3 p0 = bounds.center + vrl * (1 + radius / dist);
+			Vec3 p1 = center - vrl * (1 + bounds.radius / dist);
+			return new Bounds((p0 + p1) / 2, Vec3.Distance(p0, p1) / 2);
+		}
+
 		public bool Contains(Vec3 point)
 		{
 			return radius >= Vec3.Distance(center, point);
@@ -38,7 +54,7 @@ namespace Bubbles
 			Vec3 orig = ray.origin;
 			Vec3 dir = ray.direction;
 			Vec3 voc = center - orig;
-			double negB = voc * dir * 2;
+			double negB = Vec3.Dot(voc, dir) * 2;
 			double C = voc.sqrMagnitude - radius * radius;
 			double delta = negB * negB - 4 * C;
 			if (delta >= 0)
@@ -56,17 +72,6 @@ namespace Bubbles
 
 		public static Bounds FromDiameter(Vec3 p0, Vec3 p1)
 		{
-			return new Bounds((p0 + p1) / 2, Vec3.Distance(p0, p1) / 2);
-		}
-
-		public static Bounds operator +(Bounds lhs, Bounds rhs)
-		{
-			Vec3 vrl = lhs.center - rhs.center;
-			double dist = vrl.magnitude;
-			if (lhs.radius >= dist + rhs.radius) return lhs;
-			if (rhs.radius >= dist + lhs.radius) return rhs;
-			Vec3 p0 = rhs.center + vrl * (1 + lhs.radius / dist);
-			Vec3 p1 = lhs.center - vrl * (1 + rhs.radius / dist);
 			return new Bounds((p0 + p1) / 2, Vec3.Distance(p0, p1) / 2);
 		}
 

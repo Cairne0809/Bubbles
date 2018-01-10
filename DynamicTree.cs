@@ -1,10 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
-using MathematicsX;
 
 namespace Bubbles
 {
-	public class DynamicTree<T>
+	public class DynamicTree<UserDataType>
 	{
 		//一个动态树的子节点，不于外包直接交换
 		struct Node
@@ -16,10 +15,10 @@ namespace Bubbles
 			public int child2;
 			//高度 叶子高度为0，空闲节点高度为-1
 			public int height;
-			//包围球
+			//分裂因子
 			public Bounds bounds;
 
-			public T userData;
+			public UserDataType userData;
 
 			//是否是叶子节点
 			public bool IsLeaf()
@@ -39,13 +38,15 @@ namespace Bubbles
 		//空闲链表指针
 		int m_freeList;
 
-		public DynamicTree()
+		Stack<int> m_stack;
+
+		public DynamicTree(int capacity)
 		{
 			m_root = Node.NULL;
 
 			m_nodeCount = 0;
 			//申请一块内存,创建m_nodeCapacity子节点,并清空内存中的内容
-			m_nodes = new Node[16];
+			m_nodes = new Node[capacity];
 			// 创建一个空闲链表
 			for (int i = 0; i < m_nodes.Length; ++i)
 			{
@@ -55,6 +56,12 @@ namespace Bubbles
 			//链表的最后一个子节点的孩子指针、高度都置为初始值  
 			m_nodes[m_nodes.Length - 1].parent = Node.NULL;
 			m_freeList = 0;
+
+			m_stack = new Stack<int>(capacity);
+		}
+		public DynamicTree() : this(16)
+		{
+
 		}
 
 		int AllocateNode()
@@ -82,7 +89,7 @@ namespace Bubbles
 			m_nodes[nodeId].child1 = Node.NULL;
 			m_nodes[nodeId].child2 = Node.NULL;
 			m_nodes[nodeId].height = 0;
-			m_nodes[nodeId].userData = default(T);
+			m_nodes[nodeId].userData = default(UserDataType);
 			//增加节点数量
 			++m_nodeCount;
 			//返回节点id
@@ -122,16 +129,16 @@ namespace Bubbles
 				int child1 = m_nodes[index].child1;
 				int child2 = m_nodes[index].child2;
 
-				//选出合并包围球最小的一对
-				double r0 = m_nodes[index].bounds.radius;
-				double r1 = (m_nodes[child1].bounds + m_nodes[leaf].bounds).radius;
-				double r2 = (m_nodes[child2].bounds + m_nodes[leaf].bounds).radius;
-				int minI = MathX.MinI(r0, r1, r2);
+				//选出合并分裂因子最小的一对
+				double[] values = new double[3];
+				values[0] = m_nodes[index].bounds.GetValue();
+				values[1] = m_nodes[child1].bounds.Combine(m_nodes[leaf].bounds).GetValue();
+				values[2] = m_nodes[child2].bounds.Combine(m_nodes[leaf].bounds).GetValue();
+				int minI = 0;
+				if (values[minI] > values[1]) minI = 1;
+				if (values[minI] > values[2]) minI = 2;
 
-				if (minI == 0)
-				{
-					break;
-				}
+				if (minI == 0) break;
 				if (minI == 1)
 				{
 					index = child1;
@@ -147,9 +154,9 @@ namespace Bubbles
 			int oldParent = m_nodes[sibling].parent;
 			int newParent = AllocateNode();
 			m_nodes[newParent].parent = oldParent;
-			m_nodes[newParent].bounds = leafBB + m_nodes[sibling].bounds;
+			m_nodes[newParent].bounds = leafBB.Combine(m_nodes[sibling].bounds);
 			m_nodes[newParent].height = m_nodes[sibling].height + 1;
-			m_nodes[newParent].userData = default(T);
+			m_nodes[newParent].userData = default(UserDataType);
 
 			if (oldParent != Node.NULL)
 			{
@@ -189,7 +196,7 @@ namespace Bubbles
 
 				//获取高度和aabb
 				m_nodes[index].height = 1 + Math.Max(m_nodes[child1].height, m_nodes[child2].height);
-				m_nodes[index].bounds = m_nodes[child1].bounds + m_nodes[child2].bounds;
+				m_nodes[index].bounds = m_nodes[child1].bounds.Combine(m_nodes[child2].bounds);
 				//获取parent节点
 				index = m_nodes[index].parent;
 			}
@@ -244,7 +251,7 @@ namespace Bubbles
 					int child2 = m_nodes[index].child2;
 					//合并aabb  
 					//高度  
-					m_nodes[index].bounds = m_nodes[child1].bounds + m_nodes[child2].bounds;
+					m_nodes[index].bounds = m_nodes[child1].bounds.Combine(m_nodes[child2].bounds);
 					m_nodes[index].height = 1 + Math.Max(m_nodes[child1].height, m_nodes[child2].height);
 					//更新index  
 					index = m_nodes[index].parent;
@@ -318,8 +325,8 @@ namespace Bubbles
 					m_nodes[iC].child2 = iF;
 					m_nodes[iA].child2 = iG;
 					m_nodes[iG].parent = iA;
-					m_nodes[iA].bounds = m_nodes[iB].bounds + m_nodes[iG].bounds;
-					m_nodes[iC].bounds = m_nodes[iA].bounds + m_nodes[iF].bounds;
+					m_nodes[iA].bounds = m_nodes[iB].bounds.Combine(m_nodes[iG].bounds);
+					m_nodes[iC].bounds = m_nodes[iA].bounds.Combine(m_nodes[iF].bounds);
 					m_nodes[iA].height = 1 + Math.Max(m_nodes[iB].height, m_nodes[iG].height);
 					m_nodes[iC].height = 1 + Math.Max(m_nodes[iA].height, m_nodes[iF].height);
 				}
@@ -329,8 +336,8 @@ namespace Bubbles
 					m_nodes[iC].child2 = iG;
 					m_nodes[iA].child2 = iF;
 					m_nodes[iF].parent = iA;
-					m_nodes[iA].bounds = m_nodes[iB].bounds + m_nodes[iF].bounds;
-					m_nodes[iC].bounds = m_nodes[iA].bounds + m_nodes[iG].bounds;
+					m_nodes[iA].bounds = m_nodes[iB].bounds.Combine(m_nodes[iF].bounds);
+					m_nodes[iC].bounds = m_nodes[iA].bounds.Combine(m_nodes[iG].bounds);
 					m_nodes[iA].height = 1 + Math.Max(m_nodes[iB].height, m_nodes[iF].height);
 					m_nodes[iC].height = 1 + Math.Max(m_nodes[iA].height, m_nodes[iG].height);
 				}
@@ -372,8 +379,8 @@ namespace Bubbles
 					m_nodes[iB].child2 = iD;
 					m_nodes[iA].child1 = iE;
 					m_nodes[iE].parent = iA;
-					m_nodes[iA].bounds = m_nodes[iC].bounds + m_nodes[iE].bounds;
-					m_nodes[iB].bounds = m_nodes[iA].bounds + m_nodes[iD].bounds;
+					m_nodes[iA].bounds = m_nodes[iC].bounds.Combine(m_nodes[iE].bounds);
+					m_nodes[iB].bounds = m_nodes[iA].bounds.Combine(m_nodes[iD].bounds);
 					m_nodes[iA].height = 1 + Math.Max(m_nodes[iC].height, m_nodes[iE].height);
 					m_nodes[iB].height = 1 + Math.Max(m_nodes[iA].height, m_nodes[iD].height);
 				}
@@ -383,8 +390,8 @@ namespace Bubbles
 					m_nodes[iB].child2 = iE;
 					m_nodes[iA].child1 = iD;
 					m_nodes[iD].parent = iA;
-					m_nodes[iA].bounds = m_nodes[iC].bounds + m_nodes[iD].bounds;
-					m_nodes[iB].bounds = m_nodes[iA].bounds + m_nodes[iE].bounds;
+					m_nodes[iA].bounds = m_nodes[iC].bounds.Combine(m_nodes[iD].bounds);
+					m_nodes[iB].bounds = m_nodes[iA].bounds.Combine(m_nodes[iE].bounds);
 					m_nodes[iA].height = 1 + Math.Max(m_nodes[iC].height, m_nodes[iD].height);
 					m_nodes[iB].height = 1 + Math.Max(m_nodes[iA].height, m_nodes[iE].height);
 				}
@@ -400,17 +407,18 @@ namespace Bubbles
 
 		public Bounds GetBounds(int proxyId)
 		{
+			if (proxyId < 0 || proxyId >= m_nodes.Length) return default(Bounds);
 			return m_nodes[proxyId].bounds;
 		}
 
-		public void ForEachLeafFatBounds(Action<Bounds> forEach)
+		public void ForEachLeafBounds(Action<Bounds> forEach)
 		{
 			if (m_nodeCount == 0) return;
-			Stack<int> stack = new Stack<int>(m_nodeCount);
-			stack.Push(m_root);
-			while (stack.Count > 0)
+
+			m_stack.Push(m_root);
+			while (m_stack.Count > 0)
 			{
-				int proxyId = stack.Pop();
+				int proxyId = m_stack.Pop();
 				Node node = m_nodes[proxyId];
 				if (node.IsLeaf())
 				{
@@ -418,41 +426,45 @@ namespace Bubbles
 				}
 				else
 				{
-					stack.Push(node.child1);
-					stack.Push(node.child2);
+					m_stack.Push(node.child1);
+					m_stack.Push(node.child2);
 				}
 			}
+			m_stack.Clear();
 		}
-		public void ForEachAssistantFatBounds(Action<Bounds> forEach)
+		public void ForEachAssistantBounds(Action<Bounds> forEach)
 		{
 			if (m_nodeCount == 0) return;
-			Stack<int> stack = new Stack<int>(m_nodeCount);
-			stack.Push(m_root);
-			while (stack.Count > 0)
+
+			m_stack.Push(m_root);
+			while (m_stack.Count > 0)
 			{
-				int proxyId = stack.Pop();
+				int proxyId = m_stack.Pop();
 				Node node = m_nodes[proxyId];
 				if (!node.IsLeaf())
 				{
 					forEach(node.bounds);
-					stack.Push(node.child1);
-					stack.Push(node.child2);
+					m_stack.Push(node.child1);
+					m_stack.Push(node.child2);
 				}
 			}
+			m_stack.Clear();
 		}
 
-		public T GetUserData(int proxyId)
+		public UserDataType GetUserData(int proxyId)
 		{
+			if (proxyId < 0 || proxyId >= m_nodes.Length) return default(UserDataType);
 			return m_nodes[proxyId].userData;
 		}
-		public void ForEachUserData(Action<T> forEach)
+
+		public void ForEachUserData(Action<UserDataType> forEach)
 		{
 			if (m_nodeCount == 0) return;
-			Stack<int> stack = new Stack<int>(m_nodeCount);
-			stack.Push(m_root);
-			while (stack.Count > 0)
+
+			m_stack.Push(m_root);
+			while (m_stack.Count > 0)
 			{
-				int proxyId = stack.Pop();
+				int proxyId = m_stack.Pop();
 				Node node = m_nodes[proxyId];
 				if (node.IsLeaf())
 				{
@@ -460,13 +472,14 @@ namespace Bubbles
 				}
 				else
 				{
-					stack.Push(node.child1);
-					stack.Push(node.child2);
+					m_stack.Push(node.child1);
+					m_stack.Push(node.child2);
 				}
 			}
+			m_stack.Clear();
 		}
 
-		public double GetAreaRatio()
+		public double GetValueRatio()
 		{
 			//空树  
 			if (m_root == Node.NULL)
@@ -475,9 +488,9 @@ namespace Bubbles
 			}
 			//获取根子树
 			Node root = m_nodes[m_root];
-			double rootArea = root.bounds.radius;
-			//获取所有节点的总“体积”，其实是半径
-			double totalArea = 0;
+			double rootValue = root.bounds.GetValue();
+			//获取所有节点的总值
+			double totalValue = 0;
 			for (int i = 0; i < m_nodes.Length; ++i)
 			{
 				Node node = m_nodes[i];
@@ -486,24 +499,16 @@ namespace Bubbles
 					//内存池内的空闲节点  
 					continue;
 				}
-				totalArea += node.bounds.radius;
+				totalValue += node.bounds.GetValue();
 			}
 			//获取比率  
-			return totalArea / rootArea;
+			return totalValue / rootValue;
 		}
 
 		public int GetHeight()
 		{
-			if (m_root == Node.NULL)
-			{
-				return 0;
-			}
+			if (m_root == Node.NULL) return 0;
 			return m_nodes[m_root].height;
-		}
-		public int GetHeight(int nodeId)
-		{
-			if (nodeId < 0 || nodeId >= m_nodeCount) return 0;
-			return m_nodes[nodeId].height;
 		}
 
 		public int ComputeHeight(int nodeId)
@@ -513,12 +518,12 @@ namespace Bubbles
 			Node node = m_nodes[nodeId];
 			// 是否是叶子
 			if (node.IsLeaf())
-			{  
-				return 0;  
-			}  
+			{
+				return 0;
+			}
 			//递给调用，返回高度  
-			int height1 = ComputeHeight(node.child1);  
-			int height2 = ComputeHeight(node.child2);  
+			int height1 = ComputeHeight(node.child1);
+			int height2 = ComputeHeight(node.child2);
 			return 1 + Math.Max(height1, height2);
 		}
 
@@ -577,23 +582,23 @@ namespace Bubbles
 			// 叶子节点的个数  
 			while (count > 1)
 			{
-				//最小包围球
+				//最小分裂因子
 				double min = double.MaxValue;
 				int iMin = -1, jMin = -1;
-				//获取最小(j)和第二小(i)的包围球
+				//获取值最小(j)和值第二小(i)的分裂因子
 				for (int i = 0; i < count; ++i)
 				{
-					Bounds aabbi = m_nodes[nodes[i]].bounds;
+					Bounds bbi = m_nodes[nodes[i]].bounds;
 					for (int j = i + 1; j < count; ++j)
 					{
-						Bounds aabbj = m_nodes[nodes[j]].bounds;
-						Bounds b = aabbi + aabbj;
-						//获取最小的包围球
-						if (b.radius < min)
+						Bounds bbj = m_nodes[nodes[j]].bounds;
+						double value = bbi.Combine(bbj).GetValue();
+						//获取值最小的分裂因子
+						if (value < min)
 						{
 							iMin = i;
 							jMin = j;
-							min = b.radius;
+							min = value;
 						}
 					}
 				}
@@ -606,7 +611,7 @@ namespace Bubbles
 				m_nodes[parentIndex].child1 = index1;
 				m_nodes[parentIndex].child2 = index2;
 				m_nodes[parentIndex].height = 1 + Math.Max(m_nodes[index1].height, m_nodes[index2].height);
-				m_nodes[parentIndex].bounds = m_nodes[index1].bounds + m_nodes[index2].bounds;
+				m_nodes[parentIndex].bounds = m_nodes[index1].bounds.Combine(m_nodes[index2].bounds);
 				m_nodes[parentIndex].parent = Node.NULL;
 				//
 				m_nodes[index1].parent = parentIndex;
@@ -624,13 +629,12 @@ namespace Bubbles
 		internal void Query(Bounds bounds, Func<int, bool> QueryCallback)
 		{
 			//申请临时栈，根节点进栈
-			Stack<int> stack = new Stack<int>(m_nodeCount);
-			stack.Push(m_root);
+			m_stack.Push(m_root);
 			//判断栈的个数
-			while (stack.Count > 0)
+			while (m_stack.Count > 0)
 			{
 				//获取节点id
-				int nodeId = stack.Pop();
+				int nodeId = m_stack.Pop();
 				if (nodeId == Node.NULL)
 				{
 					//节点内存池中的空闲节点
@@ -654,11 +658,12 @@ namespace Bubbles
 					else
 					{
 						//左右孩子节点进栈
-						stack.Push(node.child1);
-						stack.Push(node.child2);
+						m_stack.Push(node.child1);
+						m_stack.Push(node.child2);
 					}
 				}
 			}
+			m_stack.Clear();
 		}
 
 		internal void RayCast(RayCastInput input, Func<int, double, double> RayCastCallback)
@@ -668,13 +673,12 @@ namespace Bubbles
 				return;
 			}
 			//创建一个临时栈，并将根节点进栈
-			Stack<int> stack = new Stack<int>(m_nodeCount);
-			stack.Push(m_root);
+			m_stack.Push(m_root);
 			//栈不为空
-			while (stack.Count > 0)
+			while (m_stack.Count > 0)
 			{
 				//出栈
-				int nodeId = stack.Pop();
+				int nodeId = m_stack.Pop();
 				if (nodeId == Node.NULL)
 				{
 					//节点内存池中的空闲节点
@@ -682,7 +686,7 @@ namespace Bubbles
 				}
 				//根据节点索引获取节点
 				Node node = m_nodes[nodeId];
-				//判断包围球
+				//判断分裂因子
 				double distance;
 				if (node.bounds.IntersectRay(input.ray, out distance) && distance <= input.maxDistance)
 				{
@@ -699,14 +703,15 @@ namespace Bubbles
 					else
 					{
 						//左右孩子节点进栈
-						stack.Push(node.child1);
-						stack.Push(node.child2);
+						m_stack.Push(node.child1);
+						m_stack.Push(node.child2);
 					}
 				}
 			}
+			m_stack.Clear();
 		}
 
-		public int CreateProxy(Bounds bounds, T userData)
+		public int CreateProxy(Bounds bounds, UserDataType userData)
 		{
 			//申请代理节点id
 			int proxyId = AllocateNode();
@@ -731,15 +736,14 @@ namespace Bubbles
 			FreeNode(proxyId);
 		}
 
-		public bool MoveProxy(int proxyId, Bounds bounds, double delta)
+		public bool MoveProxy(int proxyId, Bounds bounds)
 		{
 			if (proxyId < 0 || proxyId >= m_nodes.Length || !m_nodes[proxyId].IsLeaf()) return false;
 
 			if (m_nodes[proxyId].bounds.Contains(bounds)) return false;
 			//根据proxyId移除叶子
 			RemoveLeaf(proxyId);
-			//重新设置包围球
-			bounds.radius += delta;
+			//重新设置分裂因子
 			m_nodes[proxyId].bounds = bounds;
 			//插入叶子节点
 			InsertLeaf(proxyId);

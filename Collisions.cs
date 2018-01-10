@@ -155,7 +155,7 @@ namespace Bubbles
 				n1 = pos.z - r - ext.z;
 				n2 = pos.z + r + ext.z;
 				double nz = Math.Abs(n1) < Math.Abs(n2) ? n1 : n2;
-				distanceNormal = Vec3.MinAxis(nx, ny, nz);
+				distanceNormal = Vec3.MinAxis(new Vec3(nx, ny, nz));
 			}
 			else
 			{
@@ -192,7 +192,7 @@ namespace Bubbles
 			n1 = pos.z - ext.z;
 			n2 = pos.z + ext.z;
 			double nz = Math.Abs(n1) < Math.Abs(n2) ? n1 : n2;
-			Vec3 distanceNormal = Vec3.MinAxis(nx, ny, nz);
+			Vec3 distanceNormal = Vec3.MinAxis(new Vec3(nx, ny, nz));
 
 			CalculatePositionVelocity(lhs, rhs, lhs.rotation * distanceNormal);
 		}

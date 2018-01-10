@@ -92,9 +92,9 @@ namespace Bubbles
 			m_tree.DestroyProxy(proxyId);
 		}
 
-		internal void MoveProxy(int proxyId, Bounds bounds, double delta)
+		internal void MoveProxy(int proxyId, Bounds bounds)
 		{
-			bool buffer = m_tree.MoveProxy(proxyId, bounds, delta);
+			bool buffer = m_tree.MoveProxy(proxyId, bounds);
 			if (buffer)
 			{
 				BufferMove(proxyId);

@@ -39,7 +39,7 @@ namespace Bubbles
 
 		public void ForEachAssistantBounds(Action<Bounds> forEach)
 		{
-			m_tree.ForEachAssistantFatBounds(forEach);
+			m_tree.ForEachAssistantBounds(forEach);
 		}
 
 		public void ForEachBody(Action<Body> forEach)
@@ -167,7 +167,7 @@ namespace Bubbles
 			{
 				if (body.PrimaryUpdate(deltaTime) || imperative)
 				{
-					m_broadPhase.MoveProxy(body.m_proxyId, body.GetBounds(), 0);
+					m_broadPhase.MoveProxy(body.m_proxyId, body.GetBounds());
 				}
 			}
 			for (Body body = m_particleList; body != null; body = body.Next())
@@ -184,7 +184,7 @@ namespace Bubbles
 			{
 				if (body.FinalUpdate())
 				{
-					m_broadPhase.MoveProxy(body.m_proxyId, body.GetBounds(), 0);
+					m_broadPhase.MoveProxy(body.m_proxyId, body.GetBounds());
 				}
 			}
 			for (Body body = m_particleList; body != null; body = body.Next())
