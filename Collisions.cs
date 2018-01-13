@@ -28,44 +28,44 @@ namespace Bubbles
 			return lhs * rhs;
 		}
 
-		public static void Collide(Body lhs, Body rhs)
+		public static bool Collide(Body lhs, Body rhs)
 		{
 			if (lhs.mass + rhs.mass > 0 || lhs.isStatic || rhs.isStatic)
 			{
 				//球与球
 				if (lhs.shape.IsSphere() && rhs.shape.IsSphere())
 				{
-					Collide_Sphere_Sphere(lhs, lhs.shape.AsSphere(), rhs, rhs.shape.AsSphere());
+					return Collide_Sphere_Sphere(lhs, lhs.shape.AsSphere(), rhs, rhs.shape.AsSphere());
 				}
 				//盒子与球
 				else if (lhs.shape.IsBox() && rhs.shape.IsSphere())
 				{
-					Collide_Box_Sphere(lhs, lhs.shape.AsBox(), rhs, rhs.shape.AsSphere());
+					return Collide_Box_Sphere(lhs, lhs.shape.AsBox(), rhs, rhs.shape.AsSphere());
 				}
 				else if (lhs.shape.IsSphere() && rhs.shape.IsBox())
 				{
-					Collide_Box_Sphere(rhs, rhs.shape.AsBox(), lhs, lhs.shape.AsSphere());
+					return Collide_Box_Sphere(rhs, rhs.shape.AsBox(), lhs, lhs.shape.AsSphere());
 				}
 				//粒子与球
 				else if (lhs.shape.IsParticle() && rhs.shape.IsSphere())
 				{
-					Collide_Particle_Sphere(lhs, rhs, rhs.shape.AsSphere());
+					return Collide_Particle_Sphere(lhs, rhs, rhs.shape.AsSphere());
 				}
 				else if (lhs.shape.IsSphere() && rhs.shape.IsParticle())
 				{
-					Collide_Particle_Sphere(rhs, lhs, lhs.shape.AsSphere());
+					return Collide_Particle_Sphere(rhs, lhs, lhs.shape.AsSphere());
 				}
 				//盒子与粒子
 				else if (lhs.shape.IsBox() && rhs.shape.IsParticle())
 				{
-					Collide_Box_Particle(lhs, lhs.shape.AsBox(), rhs);
+					return Collide_Box_Particle(lhs, lhs.shape.AsBox(), rhs);
 				}
 				else if (lhs.shape.IsParticle() && rhs.shape.IsBox())
 				{
-					Collide_Box_Particle(rhs, rhs.shape.AsBox(), lhs);
+					return Collide_Box_Particle(rhs, rhs.shape.AsBox(), lhs);
 				}
-				
 			}
+			return false;
 		}
 
 		static void CalculatePositionVelocity(Body lhs, Body rhs, Vec3 distanceNormal)
@@ -93,35 +93,33 @@ namespace Bubbles
 			}
 		}
 
-		static void Collide_Sphere_Sphere(Body lhs, SphereShape lhsShp, Body rhs, SphereShape rhsShp)
+		static bool Collide_Sphere_Sphere(Body lhs, SphereShape lhsShp, Body rhs, SphereShape rhsShp)
 		{
-			if (Vec3.Distance(lhs.position, rhs.position) > lhsShp.radius + rhsShp.radius)
-			{
-				return;
-			}
+			if (Vec3.Distance(lhs.position, rhs.position) > lhsShp.radius + rhsShp.radius) return false;
 			
 			Vec3 distanceNormal = lhs.position - rhs.position;
 			if (distanceNormal.sqrMagnitude == 0) distanceNormal = Body.GetBias();
 			distanceNormal *= (lhsShp.radius + rhsShp.radius) / distanceNormal.magnitude - 1;
 
 			CalculatePositionVelocity(lhs, rhs, distanceNormal);
+
+			return true;
 		}
 
-		static void Collide_Particle_Sphere(Body lhs, Body rhs, SphereShape rhsShp)
+		static bool Collide_Particle_Sphere(Body lhs, Body rhs, SphereShape rhsShp)
 		{
-			if (Vec3.Distance(lhs.position, rhs.position) > rhsShp.radius)
-			{
-				return;
-			}
+			if (Vec3.Distance(lhs.position, rhs.position) > rhsShp.radius) return false;
 			
 			Vec3 distanceNormal = lhs.position - rhs.position;
 			if (distanceNormal.sqrMagnitude == 0) distanceNormal = Body.GetBias();
 			distanceNormal *= rhsShp.radius / distanceNormal.magnitude - 1;
 
 			CalculatePositionVelocity(lhs, rhs, distanceNormal);
+
+			return true;
 		}
 
-		static void Collide_Box_Sphere(Body lhs, BoxShape lhsShp, Body rhs, SphereShape rhsShp)
+		static bool Collide_Box_Sphere(Body lhs, BoxShape lhsShp, Body rhs, SphereShape rhsShp)
 		{
 			Vec3 ext = lhsShp.extends;
 			Vec3 pos = ~lhs.rotation * (rhs.position - lhs.position);
@@ -136,7 +134,7 @@ namespace Bubbles
 			else if (pos.y > ext.y) dy = pos.y - ext.y;
 			if (pos.z < -ext.z) dz = pos.z + ext.z;
 			else if (pos.z > ext.z) dz = pos.z - ext.z;
-			if (dx * dx + dy * dy + dz * dz > r * r) return;
+			if (dx * dx + dy * dy + dz * dz > r * r) return false;
 
 			Vec3 distanceNormal;
 			int wx = MathX.WeightI(-ext.x, ext.x, pos.x);
@@ -167,19 +165,21 @@ namespace Bubbles
 			}
 
 			CalculatePositionVelocity(lhs, rhs, lhs.rotation * distanceNormal);
+
+			return true;
 		}
 
-		static void Collide_Box_Particle(Body lhs, BoxShape lhsShp, Body rhs)
+		static bool Collide_Box_Particle(Body lhs, BoxShape lhsShp, Body rhs)
 		{
 			Vec3 ext = lhsShp.extends;
 			Vec3 pos = ~lhs.rotation * (rhs.position - lhs.position);
 
-			if (pos.x < -ext.x) return;
-			if (pos.x > ext.x) return;
-			if (pos.y < -ext.y) return;
-			if (pos.y > ext.y) return;
-			if (pos.z < -ext.z) return;
-			if (pos.z > ext.z) return;
+			if (pos.x < -ext.x) return false;
+			if (pos.x > ext.x) return false;
+			if (pos.y < -ext.y) return false;
+			if (pos.y > ext.y) return false;
+			if (pos.z < -ext.z) return false;
+			if (pos.z > ext.z) return false;
 
 			double n1;
 			double n2;
@@ -195,6 +195,8 @@ namespace Bubbles
 			Vec3 distanceNormal = Vec3.MinAxis(new Vec3(nx, ny, nz));
 
 			CalculatePositionVelocity(lhs, rhs, lhs.rotation * distanceNormal);
+
+			return true;
 		}
 
 	}

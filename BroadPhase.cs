@@ -2,7 +2,7 @@
 
 namespace Bubbles
 {
-	class BroadPhase<T>
+	class BroadPhase<UserDataType>
 	{
 		//pair定义
 		struct Pair : IComparable<Pair>
@@ -26,7 +26,7 @@ namespace Bubbles
 		public const int NULL_PROXY = -1;
 
 		//动态树声明
-		DynamicTree<T> m_tree;
+		DynamicTree<UserDataType> m_tree;
 		//移动的缓冲区
 		int[] m_moveBuffer;
 		//需要移动的代理数量
@@ -38,7 +38,7 @@ namespace Bubbles
 		//查询代理id
 		int m_queryProxyId;
 
-		internal BroadPhase(DynamicTree<T> tree)
+		internal BroadPhase(DynamicTree<UserDataType> tree)
 		{
 			m_tree = tree;
 
@@ -77,7 +77,7 @@ namespace Bubbles
 			}
 		}
 
-		internal int CreateProxy(Bounds bounds, T userData)
+		internal int CreateProxy(Bounds bounds, UserDataType userData)
 		{
 			//获取代理id
 			int proxyId = m_tree.CreateProxy(bounds, userData);
@@ -106,7 +106,7 @@ namespace Bubbles
 			BufferMove(proxyId);
 		}
 
-		internal void UpdatePairs(Action<T, T> UpdatePairsCallback)
+		internal void UpdatePairs(Action<UserDataType, UserDataType> UpdatePairsCallback)
 		{
 			//重置pair缓存区
 			m_pairCount = 0;
@@ -119,9 +119,9 @@ namespace Bubbles
 					continue;
 				}
 				// 我们需要查询树的宽大的AABB，以便当我们创建pair失败时，可以再次创建
-				Bounds bounds = m_tree.GetBounds(m_queryProxyId);
+				ISplitFactor bounds = m_tree.GetSplitFactor(m_queryProxyId);
 				// 查询树，创建多个pair并将他们添加到pair缓冲区中
-				m_tree.Query(bounds, QueryCallback);
+				m_tree.Query(bounds, Bounds.QueryCheck_Intersects, QueryCallback);
 			}
 			//重置移动缓冲区
 			m_moveCount = 0;
@@ -134,8 +134,8 @@ namespace Bubbles
 				//在pair缓冲区中获取当前的pair
 				Pair primaryPair = m_pairBuffer[index];
 				//根据相交记录
-				T userDataA = m_tree.GetUserData(primaryPair.proxyIdA);
-				T userDataB = m_tree.GetUserData(primaryPair.proxyIdB);
+				UserDataType userDataA = m_tree.GetUserData(primaryPair.proxyIdA);
+				UserDataType userDataB = m_tree.GetUserData(primaryPair.proxyIdB);
 
 				UpdatePairsCallback(userDataA, userDataB);
 				++index;
@@ -176,27 +176,26 @@ namespace Bubbles
 
 		internal void Query(Bounds bounds, Func<int, bool> QueryCallback)
 		{
-			m_tree.Query(bounds, QueryCallback);
+			m_tree.Query(bounds, Bounds.QueryCheck_Intersects, QueryCallback);
 		}
 
-		internal void RayCast(RayCastInput input, Func<int, double, double> RayCastCallback)
+		internal void RayCast(RayCastInput input, Func<int, bool> QueryCallback)
 		{
-			m_tree.RayCast(input, RayCastCallback);
+			m_tree.Query(input, Bounds.QueryCheck_RayCast, QueryCallback);
 		}
 
 		internal int RayCastClosest(RayCastInput input)
 		{
 			int closest = -1;
-			double min = input.maxDistance;
-			m_tree.RayCast(input, (int proxyId, double distance) =>
+			m_tree.Query(input, Bounds.QueryCheck_RayCast, (int proxyId) =>
 			{
-				double absDistance = Math.Abs(distance);
-				if (absDistance <= min)
+				double absDistance = Math.Abs(input.currentDistance);
+				if (absDistance <= input.maxDistance)
 				{
 					closest = proxyId;
-					min = absDistance;
+					input.maxDistance = absDistance;
 				}
-				return min;
+				return input.maxDistance >= 0;
 			});
 			return closest;
 		}

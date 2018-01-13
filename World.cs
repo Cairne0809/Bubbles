@@ -39,7 +39,11 @@ namespace Bubbles
 
 		public void ForEachAssistantBounds(Action<Bounds> forEach)
 		{
-			m_tree.ForEachAssistantBounds(forEach);
+			m_tree.ForEachAssistantSplitFactor((ISplitFactor splitf) =>
+			{
+				Bounds bounds = (Bounds)splitf;
+				forEach(bounds);
+			});
 		}
 
 		public void ForEachBody(Action<Body> forEach)
@@ -167,7 +171,8 @@ namespace Bubbles
 			{
 				if (body.PrimaryUpdate(deltaTime) || imperative)
 				{
-					m_broadPhase.MoveProxy(body.m_proxyId, body.GetBounds());
+					Bounds fat = body.GetBounds().Combine(body.position + body.velocity * deltaTime);
+					m_broadPhase.MoveProxy(body.m_proxyId, fat);
 				}
 			}
 			for (Body body = m_particleList; body != null; body = body.Next())
@@ -201,33 +206,29 @@ namespace Bubbles
 
 		void UpdatePairsCallback(Body A, Body B)
 		{
-			Collisions.Collide(A, B);
-
-			if (WhenUpdatePairsCallback != null)
-				WhenUpdatePairsCallback(A, B);
+			if (Collisions.Collide(A, B))
+			{
+				if (WhenUpdatePairsCallback != null)
+					WhenUpdatePairsCallback(A, B);
+			}
 		}
 
 		public void QueryBounds(Bounds bounds, Func<Bounds, bool> QueryCallback)
 		{
 			m_broadPhase.Query(bounds, (int proxyId) =>
 			{
-				Bounds other = m_tree.GetBounds(proxyId);
+				ISplitFactor splitf = m_tree.GetSplitFactor(proxyId);
+				Bounds other = (Bounds)splitf;
 				return QueryCallback(other);
 			});
 		}
-		public void RayCastBounds(RayCastInput input, Func<Bounds, bool> RayCastCallback)
+		public void RayCastBounds(RayCastInput input, Func<Bounds, bool> QueryCallback)
 		{
-			m_broadPhase.RayCast(input, (int proxyId, double distance) =>
+			m_broadPhase.RayCast(input, (int proxyId) =>
 			{
-				Bounds bounds = m_tree.GetBounds(proxyId);
-				if (RayCastCallback(bounds))
-				{
-					return input.maxDistance;
-				}
-				else
-				{
-					return -1;
-				}
+				ISplitFactor splitf = m_tree.GetSplitFactor(proxyId);
+				Bounds bounds = (Bounds)splitf;
+				return QueryCallback(bounds);
 			});
 		}
 		public bool RayCastClosestBounds(RayCastInput input, out Bounds closest)
@@ -235,7 +236,8 @@ namespace Bubbles
 			int proxyId = m_broadPhase.RayCastClosest(input);
 			if (proxyId >= 0)
 			{
-				closest = m_tree.GetBounds(proxyId);
+				ISplitFactor splitf = m_tree.GetSplitFactor(proxyId);
+				closest = (Bounds)splitf;
 				return true;
 			}
 			closest = Bounds.NaB;
