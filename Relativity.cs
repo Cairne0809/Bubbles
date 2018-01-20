@@ -16,7 +16,7 @@ namespace Bubbles
 		public static Vec3 Velocity(Vec3 v)
 		{
 			//just for test
-			return v * c / (v.magnitude + c);
+			return v * c / (VecX.Length(v) + c);
 		}
 
 		public static double Space(double s, double v)

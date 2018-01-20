@@ -47,7 +47,7 @@ namespace Bubbles
 		public void DrawSphere(Graphics g, Vec3 pos, double radius, Color color)
 		{
 			Vec3 delta = camera.position - pos;
-			double magnitude = delta.magnitude;
+			double magnitude = VecX.Length(delta);
 			if (magnitude <= radius) return;
 			pos += radius * radius / magnitude / magnitude * delta;
 			radius *= Math.Sin(Math.Acos(radius / magnitude));

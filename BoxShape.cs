@@ -6,7 +6,7 @@ namespace Bubbles
 	{
 		Vec3 m_extends;
 
-		public Vec3 extends { get { return m_extends; } set { m_extends = value.abs; } }
+		public Vec3 extends { get { return m_extends; } set { m_extends = VecX.Abs(value); } }
 
 		public Vec3 max { get { return m_extends; } }
 		public Vec3 min { get { return -m_extends; } }
@@ -16,7 +16,7 @@ namespace Bubbles
 			this.extends = extends;
 		}
 
-		public override double GetBoundsRadius() { return extends.magnitude; }
+		public override double GetBoundsRadius() { return VecX.Length(extends); }
 
 		public override bool IsParticle() { return false; }
 		public override bool IsSphere() { return false; }

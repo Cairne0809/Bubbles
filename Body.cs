@@ -35,7 +35,7 @@ namespace Bubbles
 			bounce = def.bounce;
 			friction = def.friction;
 			position = def.position;
-			rotation = def.rotation.sqrMagnitude == 0 ? Quat.identity : def.rotation;
+			rotation = Quat.SqrLength(def.rotation) == 0 ? Quat.identity : def.rotation;
 			shape = def.shape;
 		}
 
@@ -80,7 +80,7 @@ namespace Bubbles
 			if (deltaTime > 0)
 			{
 				velocity += acceleration * deltaTime;
-				if (velocity.sqrMagnitude > 0)
+				if (VecX.SqrLength(velocity) > 0)
 				{
 					position += velocity * deltaTime;
 					//position += Relativity.Velocity(velocity) * deltaTime;
@@ -94,12 +94,12 @@ namespace Bubbles
 
 		internal bool FinalUpdate()
 		{
-			if (m_trimVel.sqrMagnitude > 0)
+			if (VecX.SqrLength(m_trimVel) > 0)
 			{
 				velocity += m_trimVel;
 				m_trimVel = Vec3.zero;
 			}
-			if (m_trimPos.sqrMagnitude > 0)
+			if (VecX.SqrLength(m_trimPos) > 0)
 			{
 				position += m_trimPos;
 				m_trimPos = Vec3.zero;
@@ -110,7 +110,7 @@ namespace Bubbles
 
 		internal void SetTrim(Vec3 trimPos, Vec3 trimVel)
 		{
-			if (trimPos.sqrMagnitude > m_trimPos.sqrMagnitude)
+			if (VecX.SqrLength(trimPos) > VecX.SqrLength(m_trimPos))
 			{
 				m_trimPos = trimPos;
 				m_trimVel = trimVel;

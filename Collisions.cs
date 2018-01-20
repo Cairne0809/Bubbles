@@ -11,12 +11,12 @@ namespace Bubbles
 	{
 		public static bool TestOverlap(Bounds lhs, Bounds rhs)
 		{
-			return Vec3.Distance(lhs.center, rhs.center) < lhs.radius + rhs.radius;
+			return VecX.Distance(lhs.center, rhs.center) < lhs.radius + rhs.radius;
 		}
 
 		public static double Distance(Bounds lhs, Bounds rhs)
 		{
-			return Vec3.Distance(lhs.center, rhs.center) - lhs.radius - rhs.radius;
+			return VecX.Distance(lhs.center, rhs.center) - lhs.radius - rhs.radius;
 		}
 
 		public static double CombineBounce(double lhs, double rhs)
@@ -71,8 +71,9 @@ namespace Bubbles
 		static void CalculatePositionVelocity(Body lhs, Body rhs, Vec3 distanceNormal)
 		{
 			double bounceMul = CombineBounce(lhs.bounce, rhs.bounce) + 1;
-			Vec3 lhsVerticalVelocity = Vec3.Project(lhs.velocity, distanceNormal);
-			Vec3 rhsVerticalVelocity = Vec3.Project(rhs.velocity, distanceNormal);
+			Vec3 norm = VecX.Normalize(distanceNormal);
+			Vec3 lhsVerticalVelocity = VecX.Project(lhs.velocity, norm);
+			Vec3 rhsVerticalVelocity = VecX.Project(rhs.velocity, norm);
 			if (lhs.isStatic)
 			{
 				rhs.SetTrim(-distanceNormal, -bounceMul * rhsVerticalVelocity);
@@ -95,11 +96,11 @@ namespace Bubbles
 
 		static bool Collide_Sphere_Sphere(Body lhs, SphereShape lhsShp, Body rhs, SphereShape rhsShp)
 		{
-			if (Vec3.Distance(lhs.position, rhs.position) > lhsShp.radius + rhsShp.radius) return false;
+			if (VecX.Distance(lhs.position, rhs.position) > lhsShp.radius + rhsShp.radius) return false;
 			
 			Vec3 distanceNormal = lhs.position - rhs.position;
-			if (distanceNormal.sqrMagnitude == 0) distanceNormal = Body.GetBias();
-			distanceNormal *= (lhsShp.radius + rhsShp.radius) / distanceNormal.magnitude - 1;
+			if (VecX.SqrLength(distanceNormal) == 0) distanceNormal = Body.GetBias();
+			distanceNormal *= (lhsShp.radius + rhsShp.radius) / VecX.Length(distanceNormal) - 1;
 
 			CalculatePositionVelocity(lhs, rhs, distanceNormal);
 
@@ -108,11 +109,11 @@ namespace Bubbles
 
 		static bool Collide_Particle_Sphere(Body lhs, Body rhs, SphereShape rhsShp)
 		{
-			if (Vec3.Distance(lhs.position, rhs.position) > rhsShp.radius) return false;
+			if (VecX.Distance(lhs.position, rhs.position) > rhsShp.radius) return false;
 			
 			Vec3 distanceNormal = lhs.position - rhs.position;
-			if (distanceNormal.sqrMagnitude == 0) distanceNormal = Body.GetBias();
-			distanceNormal *= rhsShp.radius / distanceNormal.magnitude - 1;
+			if (VecX.SqrLength(distanceNormal) == 0) distanceNormal = Body.GetBias();
+			distanceNormal *= rhsShp.radius / VecX.Length(distanceNormal) - 1;
 
 			CalculatePositionVelocity(lhs, rhs, distanceNormal);
 
@@ -135,7 +136,7 @@ namespace Bubbles
 			if (pos.z < -ext.z) dz = pos.z + ext.z;
 			else if (pos.z > ext.z) dz = pos.z - ext.z;
 			if (dx * dx + dy * dy + dz * dz > r * r) return false;
-
+			
 			Vec3 distanceNormal;
 			int wx = MathX.WeightI(-ext.x, ext.x, pos.x);
 			int wy = MathX.WeightI(-ext.y, ext.y, pos.y);
@@ -144,24 +145,27 @@ namespace Bubbles
 			{
 				double n1;
 				double n2;
+				Vec3 temp = new Vec3();
 				n1 = pos.x - r - ext.x;
 				n2 = pos.x + r + ext.x;
-				double nx = Math.Abs(n1) < Math.Abs(n2) ? n1 : n2;
+				temp.x = Math.Abs(n1) < Math.Abs(n2) ? n1 : n2;
 				n1 = pos.y - r - ext.y;
 				n2 = pos.y + r + ext.y;
-				double ny = Math.Abs(n1) < Math.Abs(n2) ? n1 : n2;
+				temp.y = Math.Abs(n1) < Math.Abs(n2) ? n1 : n2;
 				n1 = pos.z - r - ext.z;
 				n2 = pos.z + r + ext.z;
-				double nz = Math.Abs(n1) < Math.Abs(n2) ? n1 : n2;
-				distanceNormal = Vec3.MinAxis(new Vec3(nx, ny, nz));
+				temp.z = Math.Abs(n1) < Math.Abs(n2) ? n1 : n2;
+				int minAxis = VecX.MinI(VecX.Abs(temp));
+				distanceNormal = new Vec3();
+				distanceNormal[minAxis] = temp[minAxis];
 			}
 			else
 			{
 				Vec3 pext = new Vec3(ext.x * wx, ext.y * wy, ext.z * wz);
 				Vec3 ppos = new Vec3(wx == 0 ? 0 : pos.x, wy == 0 ? 0 : pos.y, wz == 0 ? 0 : pos.z);
 				Vec3 delta = pext - ppos;
-				double mag = delta.magnitude;
-				distanceNormal = mag > 0 ? (r / mag - 1) * delta : new Vec3(wx, wy, wz) * r;
+				double mag = VecX.Length(delta);
+				distanceNormal = mag > 0 ? (r / mag - 1) * delta : r * new Vec3(wx, wy, wz);
 			}
 
 			CalculatePositionVelocity(lhs, rhs, lhs.rotation * distanceNormal);
@@ -183,16 +187,19 @@ namespace Bubbles
 
 			double n1;
 			double n2;
+			Vec3 temp = new Vec3();
 			n1 = pos.x - ext.x;
 			n2 = pos.x + ext.x;
-			double nx = Math.Abs(n1) < Math.Abs(n2) ? n1 : n2;
+			temp.x = Math.Abs(n1) < Math.Abs(n2) ? n1 : n2;
 			n1 = pos.y - ext.y;
 			n2 = pos.y + ext.y;
-			double ny = Math.Abs(n1) < Math.Abs(n2) ? n1 : n2;
+			temp.y = Math.Abs(n1) < Math.Abs(n2) ? n1 : n2;
 			n1 = pos.z - ext.z;
 			n2 = pos.z + ext.z;
-			double nz = Math.Abs(n1) < Math.Abs(n2) ? n1 : n2;
-			Vec3 distanceNormal = Vec3.MinAxis(new Vec3(nx, ny, nz));
+			temp.z = Math.Abs(n1) < Math.Abs(n2) ? n1 : n2;
+			int minAxis = VecX.MinI(VecX.Abs(temp));
+			Vec3 distanceNormal = new Vec3();
+			distanceNormal[minAxis] = temp[minAxis];
 
 			CalculatePositionVelocity(lhs, rhs, lhs.rotation * distanceNormal);
 
