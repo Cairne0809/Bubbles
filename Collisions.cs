@@ -123,7 +123,7 @@ namespace Bubbles
 		static bool Collide_Box_Sphere(Body lhs, BoxShape lhsShp, Body rhs, SphereShape rhsShp)
 		{
 			Vec3 ext = lhsShp.extends;
-			Vec3 pos = ~lhs.rotation * (rhs.position - lhs.position);
+			Vec3 pos = -lhs.rotation * (rhs.position - lhs.position);
 			double r = rhsShp.radius;
 
 			double dx = 0;
@@ -176,7 +176,7 @@ namespace Bubbles
 		static bool Collide_Box_Particle(Body lhs, BoxShape lhsShp, Body rhs)
 		{
 			Vec3 ext = lhsShp.extends;
-			Vec3 pos = ~lhs.rotation * (rhs.position - lhs.position);
+			Vec3 pos = -lhs.rotation * (rhs.position - lhs.position);
 
 			if (pos.x < -ext.x) return false;
 			if (pos.x > ext.x) return false;
