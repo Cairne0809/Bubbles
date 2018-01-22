@@ -107,7 +107,7 @@ namespace Bubbles
 			{
 				m_rotation = value;
 				if (m_parent == null) m_localRotation = value;
-				else m_localRotation = value * -m_parent.rotation;
+				else m_localRotation = value * ~m_parent.rotation;
 				DirtRotation();
 			}
 		}
