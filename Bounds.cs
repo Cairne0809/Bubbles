@@ -3,66 +3,101 @@ using MathematicsX;
 
 namespace Bubbles
 {
-	public struct Bounds : ISplitFactor
-    {
-        public Vec3 center;
-        public double radius;
+	public struct Bounds
+	{
+		internal Body m_body;
 
+        private Vec3 m_center;
+		private double m_radius;
+		private bool m_changeFlag;
+		
+		public Bounds(Body body)
+		{
+			m_body = body;
+			m_center = default(Vec3);
+			m_radius = default(double);
+			m_changeFlag = true;
+		}
 		public Bounds(Vec3 center, double radius)
 		{
-			this.center = center;
-			this.radius = radius;
+			m_body = null;
+			m_center = center;
+			m_radius = radius;
+			m_changeFlag = true;
+		}
+		public Bounds(Body body, Vec3 center, double radius)
+		{
+			m_body = body;
+			m_center = center;
+			m_radius = radius;
+			m_changeFlag = true;
 		}
 
-		public bool isNaB { get { return VecX.IsNaV(center) || double.IsNaN(radius); } }
-
-		public bool Contains(Vec3 point)
+		public Body Body
 		{
-			return radius >= VecX.Distance(center, point);
-		}
-		public bool Contains(Bounds bounds)
-		{
-			return radius >= VecX.Distance(center, bounds.center) + bounds.radius;
+			get { return m_body; }
 		}
 
-		public Bounds Combine(Vec3 point)
+		public Vec3 Center
 		{
-			Vec3 vrl = center - point;
-			double dist = VecX.Length(vrl);
-			if (radius >= dist) return this;
-			Vec3 p0 = point + vrl * (1 + radius / dist);
-			return new Bounds((p0 + point) * 0.5, VecX.Distance(p0, point) * 0.5);
+			get { return m_center; }
+			set { m_center = value; m_changeFlag = true; }
 		}
-		public Bounds Combine(Bounds bounds)
+
+		public double Radius
 		{
-			Vec3 vrl = center - bounds.center;
-			double dist = VecX.Length(vrl);
-			if (radius >= dist + bounds.radius) return this;
-			if (bounds.radius >= dist + radius) return bounds;
-			Vec3 p0 = bounds.center + vrl * (1 + radius / dist);
-			Vec3 p1 = center - vrl * (1 + bounds.radius / dist);
+			get { return m_radius; }
+			set { m_radius = value; m_changeFlag = true; }
+		}
+
+		public double Value
+		{
+			get { return m_radius; }
+		}
+
+		internal bool ReadChangeFlag()
+		{
+			bool flag = m_changeFlag;
+			m_changeFlag = false;
+			return flag;
+		}
+		
+		public Bounds Union(Bounds b)
+		{
+			Vec3 dp = m_center - b.m_center;
+			double dist = VecX.Length(dp);
+			if (m_radius >= dist + b.m_radius) return this;
+			if (b.m_radius >= dist + m_radius) return b;
+			Vec3 p0 = b.m_center + dp * (1.0 + m_radius / dist);
+			Vec3 p1 = m_center - dp * (1.0 + b.m_radius / dist);
 			return new Bounds((p0 + p1) * 0.5, VecX.Distance(p0, p1) * 0.5);
 		}
 
-		public bool Intersects(Vec3 point)
+		public double UnionValue(Bounds b)
 		{
-			return radius >= VecX.Distance(center, point);
-		}
-		public bool Intersects(Bounds bounds)
-		{
-			return radius + bounds.radius >= VecX.Distance(center, bounds.center);
+			Vec3 dp = m_center - b.m_center;
+			double dist = VecX.Length(dp);
+			if (m_radius >= dist + b.m_radius) return m_radius;
+			if (b.m_radius >= dist + m_radius) return b.m_radius;
+			Vec3 p0 = b.m_center + dp * (1.0 + m_radius / dist);
+			Vec3 p1 = m_center - dp * (1.0 + b.m_radius / dist);
+			return VecX.Distance(p0, p1) * 0.5;
 		}
 
+		public bool Overlaps(Bounds bounds)
+		{
+			double sumR = m_radius + bounds.m_radius;
+			return sumR * sumR >= VecX.SqrDistance(m_center, bounds.m_center);
+		}
 
-		public bool IntersectRay(Ray ray, out double distance)
+		public bool Overlaps(Ray3D ray, out double distance)
 		{
 			//SqrDistance(C, O+D*t) = R^2
 			//(D*D) * t^2 + (-2*OC*D) * t + (OC*OC-R^2) = 0
-			Vec3 orig = ray.origin;
-			Vec3 dir = ray.direction;
-			Vec3 voc = center - orig;
+			Vec3 dir = ray.Direction;
+			Vec3 voc = m_center - ray.Origin;
 			double negB = VecX.Dot(voc, dir) * 2;
-			double C = VecX.SqrLength(voc) - radius * radius;
+			double C = VecX.SqrLength(voc) - m_radius * m_radius;
 			double delta = negB * negB - 4 * C;
 			if (delta >= 0)
 			{
@@ -77,42 +112,22 @@ namespace Bubbles
 			return false;
 		}
 
-		public bool RayCast(RayCastInput input)
+		public bool Overlaps(ref RayCast3D rayCast)
 		{
-			double distance;
-			bool result = IntersectRay(input.ray, out distance);
-			if (result) result = distance <= input.maxDistance;
-			return result;
-		}
-
-		public double GetValue()
-		{
-			return radius;
-		}
-
-		public ISplitFactor Combine(ISplitFactor splitf)
-		{
-			if (splitf is Bounds) return Combine((Bounds)splitf);
-			return this;
-		}
-
-		public bool QueryCheck(object input, int type)
-		{
-			if (type == QueryCheck_Intersects) return Intersects((Bounds)input);
-			if (type == QueryCheck_RayCast) return RayCast((RayCastInput)input);
+			double dist;
+			if (Overlaps(rayCast.Ray, out dist) && dist <= rayCast.maxDistance)
+			{
+				rayCast.currentDistance = dist;
+				return true;
+			}
 			return false;
 		}
 
-
-		public const int QueryCheck_Intersects = 0;
-		public const int QueryCheck_RayCast = 1;
-
+		
 		public static Bounds FromDiameter(Vec3 p0, Vec3 p1)
 		{
 			return new Bounds((p0 + p1) / 2, VecX.Distance(p0, p1) / 2);
 		}
-
-		public static Bounds NaB { get { return new Bounds(Vec3.NaV, double.NaN); } }
 		
     }
 }

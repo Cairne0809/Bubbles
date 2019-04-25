@@ -5,30 +5,27 @@ namespace Bubbles
 {
 	public class Transform
 	{
-		Transform m_parent;
-		Transform[] m_children;
+		private WorldObject m_worldObject;
 
-		public int childCount { get { return m_childCount; } }
-		int m_childCount;
+		private Transform m_parent;
+		private Transform[] m_children;
+		private int m_childCount;
 
-		public WorldObject worldObject { get { return m_worldObject; } }
-		WorldObject m_worldObject;
+		private Vec3 m_localPosition = Vec3.zero;
+		private Vec3 m_position = Vec3.zero;
+		private bool m_positionDirty = false;
 
-		Vec3 m_localPosition = Vec3.zero;
-		Vec3 m_position = Vec3.zero;
-		bool m_positionDirty = false;
-
-        Quat m_localRotation = Quat.identity;
-		Quat m_rotation = Quat.identity;
-		bool m_rotationDirty = false;
+		private Quat m_localRotation = Quat.identity;
+		private Quat m_rotation = Quat.identity;
+		private bool m_rotationDirty = false;
 		
 		internal Transform(WorldObject worldObject, int childCapacity)
 		{
 			m_children = new Transform[childCapacity];
 			m_worldObject = worldObject;
 		}
-
-		void DirtPosition()
+		
+		private void DirtPosition()
 		{
 			if (m_positionDirty) return;
 			m_positionDirty = true;
@@ -37,40 +34,8 @@ namespace Bubbles
 				m_children[i].DirtPosition();
 			}
 		}
-		public Vec3 localPosition
-		{
-			get
-			{
-				return m_localPosition;
-			}
-			set
-			{
-				m_localPosition = value;
-				if (m_parent == null) m_position = value;
-				DirtPosition();
-			}
-		}
-		public Vec3 position
-		{
-			get
-			{
-				if (m_positionDirty && m_parent != null)
-				{
-					m_positionDirty = false;
-					m_position = m_parent.position + m_localPosition;
-				}
-				return m_position;
-			}
-			set
-			{
-				m_position = value;
-				if (m_parent == null) m_localPosition = value;
-				else m_localPosition = value - m_parent.position;
-				DirtPosition();
-			}
-		}
 
-		void DirtRotation()
+		private void DirtRotation()
 		{
 			if (m_rotationDirty) return;
 			m_rotationDirty = true;
@@ -79,53 +44,21 @@ namespace Bubbles
 				m_children[i].DirtRotation();
 			}
 		}
-		public Quat localRotation
-		{
-			get
-			{
-				return m_localRotation;
-			}
-			set
-			{
-				m_localRotation = value;
-				if (m_parent == null) m_rotation = value;
-				DirtRotation();
-			}
-		}
-		public Quat rotation
-		{
-			get
-			{
-				if (m_rotationDirty && m_parent != null)
-				{
-					m_rotationDirty = false;
-					m_rotation = m_parent.rotation * m_localRotation;
-				}
-				return m_rotation;
-			}
-			set
-			{
-				m_rotation = value;
-				if (m_parent == null) m_localRotation = value;
-				else m_localRotation = value * ~m_parent.rotation;
-				DirtRotation();
-			}
-		}
 
-		void OnAdd(Transform parent)
+		private void OnAdd(Transform parent)
 		{
 			m_parent = parent;
-			position = m_position;
-			rotation = m_rotation;
+			Position = m_position;
+			Rotation = m_rotation;
 		}
-		void OnRemove()
+		private void OnRemove()
 		{
-			m_localPosition = position;
-			m_localRotation = rotation;
+			m_localPosition = Position;
+			m_localRotation = Rotation;
 			m_parent = null;
 		}
 
-		void _Add(Transform child)
+		private void _Add(Transform child)
 		{
 			if (m_childCount ==  m_children.Length)
 			{
@@ -133,7 +66,7 @@ namespace Bubbles
 			}
 			m_children[m_childCount++] = child;
 		}
-		bool _AddAt(int index, Transform child)
+		private bool _AddAt(int index, Transform child)
 		{
 			if (index < 0 || index > m_childCount) return false;
 			if (m_childCount == m_children.Length)
@@ -144,7 +77,7 @@ namespace Bubbles
 			MoveChild(m_childCount++, index);
 			return true;
 		}
-		bool _Remove(Transform child)
+		private bool _Remove(Transform child)
 		{
 			int index = Array.IndexOf(m_children, child);
 			if (index != -1)
@@ -155,14 +88,14 @@ namespace Bubbles
 			}
 			return false;
 		}
-		bool _RemoveAt(int index)
+		private bool _RemoveAt(int index)
 		{
 			if (index < 0 || index >= m_childCount) return false;
 			m_children[index] = null;
 			MoveChild(index, --m_childCount);
 			return true;
 		}
-		void _Clear()
+		private void _Clear()
 		{
 			for (int i = 0; i < m_childCount; ++i)
 			{
@@ -171,12 +104,71 @@ namespace Bubbles
 			m_childCount = 0;
 		}
 
-		public Transform parent
+		public Vec3 LocalPosition
+		{
+			get { return m_localPosition; }
+			set
+			{
+				m_localPosition = value;
+				if (m_parent == null) m_position = value;
+				DirtPosition();
+			}
+		}
+
+		public Vec3 Position
 		{
 			get
 			{
-				return m_parent;
+				if (m_positionDirty && m_parent != null)
+				{
+					m_positionDirty = false;
+					m_position = m_parent.Position + m_localPosition;
+				}
+				return m_position;
 			}
+			set
+			{
+				m_position = value;
+				if (m_parent == null) m_localPosition = value;
+				else m_localPosition = value - m_parent.Position;
+				DirtPosition();
+			}
+		}
+
+		public Quat LocalRotation
+		{
+			get { return m_localRotation; }
+			set
+			{
+				m_localRotation = value;
+				if (m_parent == null) m_rotation = value;
+				DirtRotation();
+			}
+		}
+
+		public Quat Rotation
+		{
+			get
+			{
+				if (m_rotationDirty && m_parent != null)
+				{
+					m_rotationDirty = false;
+					m_rotation = m_parent.Rotation * m_localRotation;
+				}
+				return m_rotation;
+			}
+			set
+			{
+				m_rotation = value;
+				if (m_parent == null) m_localRotation = value;
+				else m_localRotation = value * ~m_parent.Rotation;
+				DirtRotation();
+			}
+		}
+
+		public Transform Parent
+		{
+			get { return m_parent; }
 			set
 			{
 				if (value == m_parent) return;
@@ -191,6 +183,11 @@ namespace Bubbles
 					m_parent._Add(this);
 				}
 			}
+		}
+
+		public int ChildCount
+		{
+			get { return m_childCount; }
 		}
 
 		public void SwapChildren(int index1, int index2)
@@ -281,17 +278,17 @@ namespace Bubbles
 			return Array.IndexOf(m_children, child);
 		}
 
-		public T GetObject<T>() where T : WorldObject
-		{
-			return m_worldObject as T;
-		}
-
 		public void ForEachChild(Action<Transform> forEach)
 		{
 			for (int i = 0; i < m_childCount; ++i)
 			{
 				forEach(m_children[i]);
 			}
+		}
+
+		public T GetObject<T>() where T : WorldObject
+		{
+			return m_worldObject as T;
 		}
 
 		public void ForEachChildObject<T>(Action<T> forEach) where T : WorldObject

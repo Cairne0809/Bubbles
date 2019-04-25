@@ -1,248 +1,232 @@
 ﻿using System;
+using System.Collections.Generic;
 using MathematicsX;
 
 namespace Bubbles
 {
-    public class World
-    {
-		DynamicTree<Body> m_tree;
-		internal BroadPhase<Body> m_broadPhase;
-
-		internal int m_bodyCount;
-		internal Body m_activeList;
-		internal Body m_inactiveList;
-		internal Body m_particleList;
-
-		public World()
+	public class World
+	{
+		private static object m_syncRoot = new object();
+		private static World m_instance;
+		public static World Instance
 		{
-			m_tree = new DynamicTree<Body>();
-			m_broadPhase = new BroadPhase<Body>(m_tree);
-			
+			get
+			{
+				if (m_instance == null)
+				{
+					lock (m_syncRoot)
+					{
+						if (m_instance == null)
+						{
+							m_instance = new World();
+						}
+					}
+				}
+				return m_instance;
+			}
+		}
+
+
+		private int m_bodyCount;
+		private Body m_bodyList;
+		private int m_particleCount;
+		private Body m_particleList;
+
+		private SpaceTree m_tree;
+		private HashSet<Body> m_tempSet;
+
+		private Action<Body, Body> m_WhenUpdatePairsCallback;
+
+		private Collisions m_collisions;
+
+		private World()
+		{
 			m_bodyCount = 0;
+			m_bodyList = null;
+			m_particleCount = 0;
+			m_particleList = null;
+
+			m_tree = new SpaceTree(16);
+			m_tempSet = new HashSet<Body>();
+
+			m_collisions = new Collisions();
 		}
 
-		public void Destroy()
+		public int BodyCount
 		{
-			for (Body body = m_activeList; body != null; body = body.Next())
-			{
-				DestroyBody(body);
-			}
-			for (Body body = m_particleList; body != null; body = body.Next())
-			{
-				DestroyBody(body);
-			}
-			for (Body body = m_inactiveList; body != null; body = body.Next())
-			{
-				DestroyBody(body);
-			}
+			get { return m_bodyCount; }
+		}
+		public Body BodyList
+		{
+			get { return m_bodyList; }
 		}
 
-		public void ForEachAssistantBounds(Action<Bounds> forEach)
+		public int ParticleCount
 		{
-			m_tree.ForEachAssistantSplitFactor((ISplitFactor splitf) =>
-			{
-				Bounds bounds = (Bounds)splitf;
-				forEach(bounds);
-			});
+			get { return m_particleCount; }
 		}
-
-		public void ForEachBody(Action<Body> forEach)
+		public Body ParticleList
 		{
-			for (Body b = m_activeList; b != null; b = b.Next())
-			{
-				forEach(b);
-			}
-			for (Body b = m_particleList; b != null; b = b.Next())
-			{
-				forEach(b);
-			}
-			for (Body b = m_inactiveList; b != null; b = b.Next())
-			{
-				forEach(b);
-			}
-		}
-
-		public int GetBodyCount()
-		{
-			return m_bodyCount;
+			get { return m_particleList; }
 		}
 
 		public Body CreateBody(BodyDef def)
 		{
-			Body body = new Body(def);
-			if (body.shape.IsParticle())
+			lock (this)
 			{
-				body.AddToList(ref m_particleList);
+				Body body = new Body(def);
+				if (body.Shape.IsParticle)
+				{
+					m_particleCount++;
+					ListAdd(body, ref m_particleList);
+				}
+				else
+				{
+					m_bodyCount++;
+					ListAdd(body, ref m_bodyList);
+					body.m_proxyId = m_tree.CreateProxy(body.Bounds, def.isKinematic);
+				}
+				return body;
 			}
-			else
-			{
-				body.AddToList(ref m_activeList);
-				body.m_proxyId = m_broadPhase.CreateProxy(body.GetBounds(), body);
-			}
-			m_bodyCount++;
-			return body;
 		}
 
 		public void DestroyBody(Body body)
 		{
-			if (body.m_next != null || body.m_prev != null)
+			lock (this)
 			{
-				if (body.isAsleep || body.isStatic)
+				if (body.Shape.IsParticle)
 				{
-					body.RemoveFromList(ref m_inactiveList);
+					m_particleCount--;
+					ListRemove(body, ref m_particleList);
 				}
 				else
 				{
-					if (body.shape.IsParticle())
-					{
-						body.RemoveFromList(ref m_particleList);
-					}
-					else
-					{
-						body.RemoveFromList(ref m_activeList);
-					}
+					m_bodyCount--;
+					ListRemove(body, ref m_bodyList);
+					m_tree.DestroyProxy(body.m_proxyId);
 				}
-				if (body.m_proxyId != BroadPhase<Body>.NULL_PROXY)
-				{
-					m_broadPhase.DestroyProxy(body.m_proxyId);
-					body.m_proxyId = BroadPhase<Body>.NULL_PROXY;
-				}
-				--m_bodyCount;
 			}
 		}
 
-		public void MakeStatic(Body body, bool b)
+		public void Update(double deltaTime, int iterations, bool clearForce)
 		{
-			if (body.m_isStatic == b) return;
-			body.m_isStatic = b;
-			if (b)
+			lock (this)
 			{
-				body.m_isAsleep = true;
-				if (body.shape.IsParticle())
+				PrimaryUpdate(deltaTime, clearForce);
+				for (int i = 0; i < iterations; ++i)
 				{
-					body.RemoveFromList(ref m_particleList);
-				}
-				else
-				{
-					body.RemoveFromList(ref m_activeList);
-				}
-				body.AddToList(ref m_inactiveList);
-			}
-			else
-			{
-				body.RemoveFromList(ref m_inactiveList);
-				if (body.shape.IsParticle())
-				{
-					body.AddToList(ref m_particleList);
-				}
-				else
-				{
-					body.AddToList(ref m_activeList);
+					FinalUpdate();
 				}
 			}
 		}
-
 		public void Update(double deltaTime)
 		{
-			PrimaryUpdate(deltaTime, false);
-			for (int i = 0; i < 1; ++i)
-			{
-				FinalUpdate();
-			}
-		}
-		public void Update()
-		{
-			PrimaryUpdate(0, true);
-			for (int i = 0; i < 1; ++i)
-			{
-				FinalUpdate();
-			}
+			Update(deltaTime, 1, true);
 		}
 
 		public void WhenUpdatePairs(Action<Body, Body> Callback)
 		{
-			this.WhenUpdatePairsCallback = Callback;
+			m_WhenUpdatePairsCallback = Callback;
 		}
-		Action<Body, Body> WhenUpdatePairsCallback;
-
-		void PrimaryUpdate(double deltaTime, bool imperative)
+		
+		
+		public bool RayCastBounds(RayCast3D input, out Bounds closest)
 		{
-			for (Body body = m_activeList; body != null; body = body.Next())
+			return m_tree.RayCastClosest(input, out closest);
+		}
+
+		public void ForEachBody(Action<Body> Callback)
+		{
+			for (Body b = m_bodyList; b != null; b = b.Next)
 			{
-				if (body.PrimaryUpdate(deltaTime) || imperative)
+				Callback(b);
+			}
+		}
+
+		public void ForEachParticle(Action<Body> Callback)
+		{
+			for (Body b = m_particleList; b != null; b = b.Next)
+			{
+				Callback(b);
+			}
+		}
+
+
+		private void ListAdd(Body body, ref Body list)
+		{
+			if (list != null) list.m_prev = body;
+			body.m_next = list;
+			list = body;
+		}
+
+		private void ListRemove(Body body, ref Body list)
+		{
+			Body next = body.m_next;
+			Body prev = body.m_prev;
+			if (body == list) list = next;
+			if (next != null) next.m_prev = prev;
+			if (prev != null) prev.m_next = next;
+		}
+
+		private void PrimaryUpdate(double deltaTime, bool clearForce)
+		{
+			for (Body b = m_bodyList; b != null; b = b.Next)
+			{
+				b.PrimaryUpdate(deltaTime, clearForce);
+				if (b.Bounds.ReadChangeFlag())
 				{
-					Bounds fat = body.GetBounds().Combine(body.position + body.velocity * deltaTime);
-					m_broadPhase.MoveProxy(body.m_proxyId, fat);
+					m_tempSet.Add(b);
+					m_tree.DestroyProxy(b.m_proxyId);
 				}
 			}
-			for (Body body = m_particleList; body != null; body = body.Next())
+			foreach (Body b in m_tempSet)
 			{
-				body.PrimaryUpdate(deltaTime);
+				b.m_proxyId = m_tree.CreateProxy(b.Bounds, !b.IsKinematic);
+			}
+			m_tempSet.Clear();
+
+			for (Body b = m_particleList; b != null; b = b.Next)
+			{
+				b.PrimaryUpdate(deltaTime, clearForce);
 			}
 		}
 
-		void FinalUpdate()
+		private void FinalUpdate()
 		{
-			m_broadPhase.UpdatePairs(UpdatePairsCallback);
+			m_tree.UpdatePairs(UpdatePairsCallback);
 
-			for (Body body = m_activeList; body != null; body = body.Next())
+			for (Body b = m_bodyList; b != null; b = b.Next)
 			{
-				if (body.FinalUpdate())
+				b.FinalUpdate();
+				if (b.Bounds.ReadChangeFlag())
 				{
-					m_broadPhase.MoveProxy(body.m_proxyId, body.GetBounds());
+					m_tempSet.Add(b);
+					m_tree.DestroyProxy(b.m_proxyId);
 				}
 			}
-			for (Body body = m_particleList; body != null; body = body.Next())
+			foreach (Body b in m_tempSet)
 			{
-				m_broadPhase.Query(body.GetBounds(), (int proxyId) =>
+				b.m_proxyId = m_tree.CreateProxy(b.Bounds, !b.IsKinematic);
+			}
+			m_tempSet.Clear();
+			
+			for (Body b = m_particleList; b != null; b = b.Next)
+			{
+				foreach (Bounds other in m_tree.OverlapsCollection(b.Bounds))
 				{
-					Body other = m_tree.GetUserData(proxyId);
-					UpdatePairsCallback(body, other);
-					return true;
-				});
-				body.FinalUpdate();
+					UpdatePairsCallback(b.Bounds, other);
+				}
+				b.FinalUpdate();
 			}
 		}
 
-		void UpdatePairsCallback(Body A, Body B)
+		private void UpdatePairsCallback(Bounds a, Bounds b)
 		{
-			if (Collisions.Collide(A, B))
+			if (m_collisions.Collide(a.Body, b.Body))
 			{
-				if (WhenUpdatePairsCallback != null)
-					WhenUpdatePairsCallback(A, B);
+				m_WhenUpdatePairsCallback?.Invoke(a.Body, b.Body);
 			}
 		}
 
-		public void QueryBounds(Bounds bounds, Func<Bounds, bool> QueryCallback)
-		{
-			m_broadPhase.Query(bounds, (int proxyId) =>
-			{
-				ISplitFactor splitf = m_tree.GetSplitFactor(proxyId);
-				Bounds other = (Bounds)splitf;
-				return QueryCallback(other);
-			});
-		}
-		public void RayCastBounds(RayCastInput input, Func<Bounds, bool> QueryCallback)
-		{
-			m_broadPhase.RayCast(input, (int proxyId) =>
-			{
-				ISplitFactor splitf = m_tree.GetSplitFactor(proxyId);
-				Bounds bounds = (Bounds)splitf;
-				return QueryCallback(bounds);
-			});
-		}
-		public bool RayCastClosestBounds(RayCastInput input, out Bounds closest)
-		{
-			int proxyId = m_broadPhase.RayCastClosest(input);
-			if (proxyId >= 0)
-			{
-				ISplitFactor splitf = m_tree.GetSplitFactor(proxyId);
-				closest = (Bounds)splitf;
-				return true;
-			}
-			closest = Bounds.NaB;
-			return false;
-		}
-
-    }
+	}
 }

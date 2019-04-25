@@ -1,6 +1,6 @@
 ﻿namespace Bubbles
 {
-	public class WorldObject
+	public abstract class WorldObject
 	{
 	}
 }

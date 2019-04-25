@@ -1,131 +1,177 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using MathematicsX;
 
 namespace Bubbles
 {
-	public static class Collisions
+	public class Collisions
 	{
-		public static bool TestOverlap(Bounds lhs, Bounds rhs)
+		private Simplex2D m_simplex;
+
+		public Collisions()
 		{
-			return VecX.Distance(lhs.center, rhs.center) < lhs.radius + rhs.radius;
+			m_simplex = new Simplex2D();
 		}
 
-		public static double Distance(Bounds lhs, Bounds rhs)
+		public bool Distance(Body body1, Body body2, out Vec3 distNorm)
 		{
-			return VecX.Distance(lhs.center, rhs.center) - lhs.radius - rhs.radius;
+			m_simplex.Clear();
+
+			distNorm = body1.Position - body2.Position;
+			//distNorm = Vec3.GetRandom();
+
+			// get the first Minkowski Difference point
+			m_simplex.Add(Support(body1, body2, distNorm));
+			// negate d for the next point
+			distNorm = -distNorm;
+			// start looping
+			while (true)
+			{
+				// add a new point to the simplex because we haven't terminated yet
+				m_simplex.Add(Support(body1, body2, distNorm));
+				// otherwise we need to determine if the origin is in
+				// the current simplex
+
+				if (VecX.Dot(distNorm, m_simplex.Last) <= 0)
+				{
+					//Out of Voronoi
+					return false;
+				}
+				else
+				{
+					Vec2 d2;
+					if (m_simplex.ContainsOrigin(out d2))
+					{
+						distNorm.xy = d2;
+						// if it does then we know there is a collision
+						return true;
+					}
+					distNorm.xy = d2;
+				}
+			}
+
 		}
 
-		public static double CombineBounce(double lhs, double rhs)
+		//Returns one of the Minkowski Difference
+		private Vec3 Support(Body body1, Body body2, Vec3 direction)
 		{
-			return (lhs + rhs) / 2;
-		}
-		public static double CombineFriction(double lhs, double rhs)
-		{
-			return lhs * rhs;
+			Vec3 p1 = body1.GetFarthestPoint(direction);
+			Vec3 p2 = body2.GetFarthestPoint(-direction);
+			Vec3 d = p1 - p2;
+			return d;
 		}
 
-		public static bool Collide(Body lhs, Body rhs)
+
+
+
+		private double CombineBounce(double lhs, double rhs)
 		{
-			if (lhs.mass + rhs.mass > 0 || lhs.isStatic || rhs.isStatic)
+			return Math.Max(lhs, rhs);
+		}
+		private double CombineFriction(double lhs, double rhs)
+		{
+			return Math.Min(lhs, rhs);
+		}
+
+		public bool Collide(Body lhs, Body rhs)
+		{
+			if (lhs.Mass + rhs.Mass > 0 || lhs.IsKinematic || rhs.IsKinematic)
 			{
 				//球与球
-				if (lhs.shape.IsSphere() && rhs.shape.IsSphere())
+				if (lhs.Shape.IsSphere && rhs.Shape.IsSphere)
 				{
-					return Collide_Sphere_Sphere(lhs, lhs.shape.AsSphere(), rhs, rhs.shape.AsSphere());
+					return Collide_Sphere_Sphere(lhs, lhs.Shape.AsSphere, rhs, rhs.Shape.AsSphere);
+				}
+				//盒子与盒子
+				else if (lhs.Shape.IsBox && rhs.Shape.IsBox)
+				{
+					return Collide_Box_Box(lhs, rhs);
 				}
 				//盒子与球
-				else if (lhs.shape.IsBox() && rhs.shape.IsSphere())
+				else if (lhs.Shape.IsBox && rhs.Shape.IsSphere)
 				{
-					return Collide_Box_Sphere(lhs, lhs.shape.AsBox(), rhs, rhs.shape.AsSphere());
+					return Collide_Box_Sphere(lhs, lhs.Shape.AsBox, rhs, rhs.Shape.AsSphere);
 				}
-				else if (lhs.shape.IsSphere() && rhs.shape.IsBox())
+				else if (lhs.Shape.IsSphere && rhs.Shape.IsBox)
 				{
-					return Collide_Box_Sphere(rhs, rhs.shape.AsBox(), lhs, lhs.shape.AsSphere());
+					return Collide_Box_Sphere(rhs, rhs.Shape.AsBox, lhs, lhs.Shape.AsSphere);
 				}
 				//粒子与球
-				else if (lhs.shape.IsParticle() && rhs.shape.IsSphere())
+				else if (lhs.Shape.IsParticle && rhs.Shape.IsSphere)
 				{
-					return Collide_Particle_Sphere(lhs, rhs, rhs.shape.AsSphere());
+					return Collide_Particle_Sphere(lhs, rhs, rhs.Shape.AsSphere);
 				}
-				else if (lhs.shape.IsSphere() && rhs.shape.IsParticle())
+				else if (lhs.Shape.IsSphere && rhs.Shape.IsParticle)
 				{
-					return Collide_Particle_Sphere(rhs, lhs, lhs.shape.AsSphere());
+					return Collide_Particle_Sphere(rhs, lhs, lhs.Shape.AsSphere);
 				}
 				//盒子与粒子
-				else if (lhs.shape.IsBox() && rhs.shape.IsParticle())
+				else if (lhs.Shape.IsBox && rhs.Shape.IsParticle)
 				{
-					return Collide_Box_Particle(lhs, lhs.shape.AsBox(), rhs);
+					return Collide_Box_Particle(lhs, lhs.Shape.AsBox, rhs);
 				}
-				else if (lhs.shape.IsParticle() && rhs.shape.IsBox())
+				else if (lhs.Shape.IsParticle && rhs.Shape.IsBox)
 				{
-					return Collide_Box_Particle(rhs, rhs.shape.AsBox(), lhs);
+					return Collide_Box_Particle(rhs, rhs.Shape.AsBox, lhs);
 				}
 			}
 			return false;
 		}
 
-		static void CalculatePositionVelocity(Body lhs, Body rhs, Vec3 distanceNormal)
+		private void CalcPosVel(Body lhs, Body rhs, Vec3 distNorm)
 		{
-			double bounceMul = CombineBounce(lhs.bounce, rhs.bounce) + 1;
-			Vec3 norm = VecX.Normalize(distanceNormal);
-			Vec3 lhsVerticalVelocity = VecX.Project(lhs.velocity, norm);
-			Vec3 rhsVerticalVelocity = VecX.Project(rhs.velocity, norm);
-			if (lhs.isStatic)
+			double bounceMul = CombineBounce(lhs.Bounce, rhs.Bounce) + 1;
+			Vec3 lnv = VecX.Project(lhs.Velocity, distNorm);
+			Vec3 rnv = VecX.Project(rhs.Velocity, distNorm);
+			if (lhs.IsKinematic)
 			{
-				rhs.SetTrim(-distanceNormal, -bounceMul * rhsVerticalVelocity);
+				rhs.SetTrim(-distNorm, -bounceMul * rnv);
 			}
-			else if (rhs.isStatic)
+			else if (rhs.IsKinematic)
 			{
-				lhs.SetTrim(distanceNormal, -bounceMul * lhsVerticalVelocity);
+				lhs.SetTrim(distNorm, -bounceMul * lnv);
 			}
 			else
 			{
-				double sumMass = lhs.mass + rhs.mass;
-				Vec3 lhsTrimPos = rhs.mass / sumMass * distanceNormal;
-				Vec3 rhsTrimPos = -lhs.mass / sumMass * distanceNormal;
-				Vec3 lhsTrimVel = rhs.mass / sumMass * bounceMul * (rhsVerticalVelocity - lhsVerticalVelocity);
-				Vec3 rhsTrimVel = lhs.mass / sumMass * bounceMul * (lhsVerticalVelocity - rhsVerticalVelocity);
+				double sumMass = lhs.Mass + rhs.Mass;
+				Vec3 lhsTrimPos = rhs.Mass / sumMass * distNorm;
+				Vec3 rhsTrimPos = -lhs.Mass / sumMass * distNorm;
+				Vec3 lhsTrimVel = rhs.Mass / sumMass * bounceMul * (rnv - lnv);
+				Vec3 rhsTrimVel = lhs.Mass / sumMass * bounceMul * (lnv - rnv);
 				lhs.SetTrim(lhsTrimPos, lhsTrimVel);
 				rhs.SetTrim(rhsTrimPos, rhsTrimVel);
 			}
 		}
 
-		static bool Collide_Sphere_Sphere(Body lhs, SphereShape lhsShp, Body rhs, SphereShape rhsShp)
+		private bool Collide_Sphere_Sphere(Body lhs, SphereShape lhsShp, Body rhs, SphereShape rhsShp)
 		{
-			if (VecX.Distance(lhs.position, rhs.position) > lhsShp.radius + rhsShp.radius) return false;
+			if (VecX.Distance(lhs.Position, rhs.Position) > lhsShp.Radius + rhsShp.Radius) return false;
 			
-			Vec3 distanceNormal = lhs.position - rhs.position;
-			if (VecX.SqrLength(distanceNormal) == 0) distanceNormal = Body.GetBias();
-			distanceNormal *= (lhsShp.radius + rhsShp.radius) / VecX.Length(distanceNormal) - 1;
+			Vec3 distNorm = lhs.Position - rhs.Position;
+			distNorm *= (lhsShp.Radius + rhsShp.Radius) / VecX.Length(distNorm) - 1;
 
-			CalculatePositionVelocity(lhs, rhs, distanceNormal);
+			CalcPosVel(lhs, rhs, distNorm);
 
 			return true;
 		}
 
-		static bool Collide_Particle_Sphere(Body lhs, Body rhs, SphereShape rhsShp)
+		private bool Collide_Particle_Sphere(Body lhs, Body rhs, SphereShape rhsShp)
 		{
-			if (VecX.Distance(lhs.position, rhs.position) > rhsShp.radius) return false;
+			if (VecX.Distance(lhs.Position, rhs.Position) > rhsShp.Radius) return false;
 			
-			Vec3 distanceNormal = lhs.position - rhs.position;
-			if (VecX.SqrLength(distanceNormal) == 0) distanceNormal = Body.GetBias();
-			distanceNormal *= rhsShp.radius / VecX.Length(distanceNormal) - 1;
+			Vec3 distNorm = lhs.Position - rhs.Position;
+			distNorm *= rhsShp.Radius / distNorm.Length() - 1;
 
-			CalculatePositionVelocity(lhs, rhs, distanceNormal);
+			CalcPosVel(lhs, rhs, distNorm);
 
 			return true;
 		}
 
-		static bool Collide_Box_Sphere(Body lhs, BoxShape lhsShp, Body rhs, SphereShape rhsShp)
+		private bool Collide_Box_Sphere(Body lhs, BoxShape lhsShp, Body rhs, SphereShape rhsShp)
 		{
-			Vec3 ext = lhsShp.extends;
-			Vec3 pos = ~lhs.rotation * (rhs.position - lhs.position);
-			double r = rhsShp.radius;
-
+			Vec3 ext = lhsShp.Extends;
+			Vec3 pos = ~lhs.Rotation * (rhs.Position - lhs.Position);
+			double r = rhsShp.Radius;
 			double dx = 0;
 			double dy = 0;
 			double dz = 0;
@@ -137,7 +183,7 @@ namespace Bubbles
 			else if (pos.z > ext.z) dz = pos.z - ext.z;
 			if (dx * dx + dy * dy + dz * dz > r * r) return false;
 			
-			Vec3 distanceNormal;
+			Vec3 distNorm;
 			int wx = MathX.WeightI(-ext.x, ext.x, pos.x);
 			int wy = MathX.WeightI(-ext.y, ext.y, pos.y);
 			int wz = MathX.WeightI(-ext.z, ext.z, pos.z);
@@ -145,7 +191,7 @@ namespace Bubbles
 			{
 				double n1;
 				double n2;
-				Vec3 temp = new Vec3();
+				Vec3 temp;
 				n1 = pos.x - r - ext.x;
 				n2 = pos.x + r + ext.x;
 				temp.x = Math.Abs(n1) < Math.Abs(n2) ? n1 : n2;
@@ -155,28 +201,28 @@ namespace Bubbles
 				n1 = pos.z - r - ext.z;
 				n2 = pos.z + r + ext.z;
 				temp.z = Math.Abs(n1) < Math.Abs(n2) ? n1 : n2;
-				int minAxis = VecX.MinI(VecX.Abs(temp));
-				distanceNormal = new Vec3();
-				distanceNormal[minAxis] = temp[minAxis];
+				int minAxis = temp.Abs().MinAxis();
+				distNorm = Vec3.zero;
+				distNorm[minAxis] = temp[minAxis];
 			}
 			else
 			{
 				Vec3 pext = new Vec3(ext.x * wx, ext.y * wy, ext.z * wz);
 				Vec3 ppos = new Vec3(wx == 0 ? 0 : pos.x, wy == 0 ? 0 : pos.y, wz == 0 ? 0 : pos.z);
 				Vec3 delta = pext - ppos;
-				double mag = VecX.Length(delta);
-				distanceNormal = mag > 0 ? (r / mag - 1) * delta : r * new Vec3(wx, wy, wz);
+				double mag = delta.Length();
+				distNorm = mag > 0 ? (r / mag - 1) * delta : r * new Vec3(wx, wy, wz);
 			}
 
-			CalculatePositionVelocity(lhs, rhs, lhs.rotation * distanceNormal);
+			CalcPosVel(lhs, rhs, lhs.Rotation * distNorm);
 
 			return true;
 		}
 
-		static bool Collide_Box_Particle(Body lhs, BoxShape lhsShp, Body rhs)
+		private bool Collide_Box_Particle(Body lhs, BoxShape lhsShp, Body rhs)
 		{
-			Vec3 ext = lhsShp.extends;
-			Vec3 pos = ~lhs.rotation * (rhs.position - lhs.position);
+			Vec3 ext = lhsShp.Extends;
+			Vec3 pos = ~lhs.Rotation * (rhs.Position - lhs.Position);
 
 			if (pos.x < -ext.x) return false;
 			if (pos.x > ext.x) return false;
@@ -187,7 +233,7 @@ namespace Bubbles
 
 			double n1;
 			double n2;
-			Vec3 temp = new Vec3();
+			Vec3 temp;
 			n1 = pos.x - ext.x;
 			n2 = pos.x + ext.x;
 			temp.x = Math.Abs(n1) < Math.Abs(n2) ? n1 : n2;
@@ -197,13 +243,23 @@ namespace Bubbles
 			n1 = pos.z - ext.z;
 			n2 = pos.z + ext.z;
 			temp.z = Math.Abs(n1) < Math.Abs(n2) ? n1 : n2;
-			int minAxis = VecX.MinI(VecX.Abs(temp));
-			Vec3 distanceNormal = new Vec3();
-			distanceNormal[minAxis] = temp[minAxis];
+			int minAxis = temp.Abs().MinAxis();
+			Vec3 distNorm = Vec3.zero;
+			distNorm[minAxis] = temp[minAxis];
 
-			CalculatePositionVelocity(lhs, rhs, lhs.rotation * distanceNormal);
+			CalcPosVel(lhs, rhs, lhs.Rotation * distNorm);
 
 			return true;
+		}
+
+		private bool Collide_Box_Box(Body lhs, Body rhs)
+		{
+			Vec3 distNorm;
+			if (Distance(lhs, rhs, out distNorm))
+			{
+				CalcPosVel(lhs, rhs, distNorm);
+			}
+			return false;
 		}
 
 	}

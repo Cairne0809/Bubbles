@@ -6,9 +6,10 @@ namespace Bubbles
 {
 	public class BubblesDrawer
 	{
-		Pen pen = new Pen(Color.FromArgb(255, 255, 0));
+		private Pen pen = new Pen(Color.FromArgb(255, 255, 0));
+		private SolidBrush brush = new SolidBrush(Color.FromArgb(255, 255, 0));
 
-		public Camera camera = new Camera();
+		public SimpleCamera camera = new SimpleCamera();
 
 		public void DrawPoint(Graphics g, Vec3 pos, Color color)
 		{
@@ -17,8 +18,7 @@ namespace Bubbles
 				int x = ToScreenX(pos.x);
 				int y = ToScreenY(pos.y);
 				pen.Color = color;
-				try { g.DrawEllipse(pen, x, y, 1, 1); }
-				catch (Exception e) { }
+				g.DrawEllipse(pen, x, y, 1, 1);
 			}
 		}
 		public void DrawPoint(Graphics g, Vec3 pos)
@@ -35,8 +35,7 @@ namespace Bubbles
 				int x2 = ToScreenX(p2.x);
 				int y2 = ToScreenY(p2.y);
 				pen.Color = color;
-				try { g.DrawLine(pen, x1, y1, x2, y2); }
-				catch (Exception e) { }
+				g.DrawLine(pen, x1, y1, x2, y2);
 			}
 		}
 		public void DrawSegment(Graphics g, Vec3 p1, Vec3 p2)
@@ -46,7 +45,7 @@ namespace Bubbles
 
 		public void DrawSphere(Graphics g, Vec3 pos, double radius, Color color)
 		{
-			Vec3 delta = camera.position - pos;
+			Vec3 delta = camera.Position - pos;
 			double magnitude = VecX.Length(delta);
 			if (magnitude <= radius) return;
 			pos += radius * radius / magnitude / magnitude * delta;
@@ -58,8 +57,7 @@ namespace Bubbles
 				int y = ToScreenY(pos.y + radius);
 				int r = Ceiling(radius * 2);
 				pen.Color = color;
-				try { g.DrawEllipse(pen, x, y, r, r); }
-				catch (Exception e) { }
+				g.DrawEllipse(pen, x, y, r, r);
 			}
 		}
 		public void DrawSphere(Graphics g, Vec3 pos, double radius)
@@ -70,7 +68,8 @@ namespace Bubbles
 		public void DrawCube(Graphics g, Vec3 pos, Quat rot, Vec3 extends, Color color)
 		{
 			BoxShape box = new BoxShape(extends);
-			Segment<Vec3>[] edges = box.GetEdges();
+			LineSeg<Vec3>[] edges = new LineSeg<Vec3>[12];
+			box.GetEdges(edges);
 			for (int i = 0; i < edges.Length; i++)
 			{
 				Vec3 p0 = rot * edges[i].p0 + pos;
@@ -83,28 +82,32 @@ namespace Bubbles
 			DrawCube(g, pos, rot, extends, Color.FromArgb(0, 255, 0));
 		}
 
-		public void DrawWorld(Graphics g, World world, bool drawAssist = false)
+		public void DrawText(Graphics g, string text, float size, Color color)
 		{
-			if (drawAssist)
+			brush.Color = color;
+			Font font = new Font("Consolas", size);
+			g.DrawString(text, font, brush, new PointF(0, 0));
+		}
+		public void DrawText(Graphics g, string text, float size)
+		{
+			DrawText(g, text, size, Color.White);
+		}
+
+		public void DrawWorld(Graphics g, World world)
+		{
+			world.ForEachParticle((Body body) =>
 			{
-				world.ForEachAssistantBounds((Bounds bounds) =>
-				{
-					DrawSphere(g, bounds.center, bounds.radius, Color.FromArgb(127, 127, 127));
-				});
-			}
+				DrawPoint(g, body.Position);
+			});
 			world.ForEachBody((Body body) =>
 			{
-				if (body.shape.IsParticle())
+				if (body.Shape.IsSphere)
 				{
-					DrawPoint(g, body.position);
+					DrawSphere(g, body.Position, (double)body.Shape.AsSphere.Radius);
 				}
-				else if (body.shape.IsSphere())
+				else if (body.Shape.IsBox)
 				{
-					DrawSphere(g, body.position, body.shape.AsSphere().radius);
-				}
-				else if (body.shape.IsBox())
-				{
-					DrawCube(g, body.position, body.rotation, body.shape.AsBox().extends);
+					DrawCube(g, body.Position, body.Rotation, body.Shape.AsBox.Extends);
 				}
 			});
 		}
@@ -115,7 +118,7 @@ namespace Bubbles
 		}
 		int ToScreenY(double v)
 		{
-			return (int)camera.screenHeight - (int)Math.Round(v);
+			return (int)camera.ScreenHeight - (int)Math.Round(v);
 		}
 		int Ceiling(double v)
 		{

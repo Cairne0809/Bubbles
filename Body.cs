@@ -1,111 +1,149 @@
-﻿using MathematicsX;
+﻿using System;
+using System.Collections.Generic;
+using MathematicsX;
 
 namespace Bubbles
 {
-	public class Body
-    {
-		internal int m_proxyId = -1;
-		internal Body m_next = null;
-		internal Body m_prev = null;
-		
-		internal bool m_isStatic = false;
-		internal bool m_isAsleep = false;
+	public class Body : IComparable<Body>
+	{
+		internal int m_proxyId;
+		internal Body m_prev;
+		internal Body m_next;
 
-		public double mass { get; set; }
-		public double bounce { get; set; }
-		public double friction { get; set; }
-		public Shape shape { get; set; }
-
-		public bool isStatic { get { return m_isStatic; } }
-		public bool isAsleep { get { return m_isAsleep; } }
-		public Vec3 position { get; set; }
-		public Quat rotation { get; set; }
-		public Vec3 eulerAngles { get { return Quat.ToEuler(rotation); } set { rotation = Quat.FromEuler(value); } }
-		public Vec3 velocity { get; set; }
-		public Vec3 acceleration { get; set; }
-		public Vec3 angularVelocity { get; set; }
-		public Vec3 angularAcceleration { get; set; }
+		private Shape m_shape;
+		private bool m_isKinematic;
+		private double m_mass;
+		private double m_bounce;
+		//private double m_friction;
+		private Quat m_rotation;
+		private Vec3 m_position;
+		private Vec3 m_velocity;
+		private Vec3 m_angularVelocity;
+		private Vec3 m_acceleration;
+		private Vec3 m_angularAcceleration;
+		private Bounds m_bounds;
 		
-		Vec3 m_trimPos;
-		Vec3 m_trimVel;
+		private Vec3 m_trimPos;
+		private Vec3 m_trimVel;
 
 		internal Body(BodyDef def)
 		{
-			mass = def.mass;
-			bounce = def.bounce;
-			friction = def.friction;
-			position = def.position;
-			rotation = Quat.SqrLength(def.rotation) == 0 ? Quat.identity : def.rotation;
-			shape = def.shape;
+			m_shape = def.shape;
+			m_isKinematic = def.isKinematic;
+			m_mass = def.mass;
+			m_bounce = def.bounce;
+			//m_friction = def.friction;
+			m_rotation = def.rotation.Equals(Quat.zero) ? Quat.identity : def.rotation;
+			m_position = def.position;
+			m_bounds = new Bounds(this, m_position, m_shape.Radius);
 		}
 
-		public Body Next()
+		public Body Next
 		{
-			return m_next;
+			get { return m_next; }
 		}
 
-		public Bounds GetBounds()
+		public Shape Shape
 		{
-			return new Bounds(position, shape.GetBoundsRadius());
+			get { return m_shape; }
 		}
 
-		internal void AddToList(ref Body list)
+		public bool IsKinematic
 		{
-			if (list != null)
-			{
-				m_next = list;
-				list.m_prev = this;
-			}
-			list = this;
-		}
-		internal void RemoveFromList(ref Body list)
-		{
-			if (list == this)
-			{
-				list = m_next;
-			}
-			if (m_next != null)
-			{
-				m_next.m_prev = m_prev;
-			}
-			if (m_prev != null)
-			{
-				m_prev.m_next = m_next;
-			}
-			m_prev = m_next = null;
+			get { return m_isKinematic; }
+			set { m_isKinematic = value; }
 		}
 
-		internal bool PrimaryUpdate(double deltaTime)
+		public double Mass
+		{
+			get { return m_mass; }
+			set { m_mass = value; }
+		}
+		public double Bounce
+		{
+			get { return m_bounce; }
+			set { m_bounce = value; }
+		}
+		/*public double Friction
+		{
+			get { return m_friction; }
+			set { m_friction = value; }
+		}*/
+
+		public Quat Rotation
+		{
+			get { return m_rotation; }
+			set { m_rotation = value; }
+		}
+		public Vec3 Position
+		{
+			get { return m_position; }
+			set { m_bounds.Center = m_position = value; }
+		}
+		public Vec3 Velocity
+		{
+			get { return m_velocity; }
+			set { m_velocity = value; }
+		}
+		public Vec3 AngularVelocity
+		{
+			get { return m_angularVelocity; }
+			set { m_angularVelocity = value; }
+		}
+		public Vec3 Acceleration
+		{
+			get { return m_acceleration; }
+			set { m_acceleration = value; }
+		}
+		public Vec3 AngularAcceleration
+		{
+			get { return m_angularAcceleration; }
+			set { m_angularAcceleration = value; }
+		}
+
+		public Bounds Bounds
+		{
+			get { return m_bounds; }
+		}
+
+		public Vec3 GetFarthestPoint(Vec3 direction)
+		{
+			return m_position + m_rotation * m_shape.GetFarthestPoint(~m_rotation * direction);
+		}
+
+
+		internal void PrimaryUpdate(double deltaTime, bool clearForce)
 		{
 			if (deltaTime > 0)
 			{
-				velocity += acceleration * deltaTime;
-				if (VecX.SqrLength(velocity) > 0)
+				if (!m_isKinematic)
 				{
-					position += velocity * deltaTime;
-					//position += Relativity.Velocity(velocity) * deltaTime;
-					acceleration = Vec3.zero;
-					return true;
+					m_velocity += m_acceleration * deltaTime;
+					m_angularVelocity += m_angularAcceleration * deltaTime;
+					if (clearForce)
+					{
+						m_acceleration = m_angularAcceleration = Vec3.zero;
+					}
+				}
+				if (!m_velocity.Equals(Vec3.zero))
+				{
+					Position = m_position + m_velocity * deltaTime;
 				}
 			}
-			acceleration = Vec3.zero;
-			return false;
 		}
-
-		internal bool FinalUpdate()
+		
+		internal void FinalUpdate()
 		{
-			if (VecX.SqrLength(m_trimVel) > 0)
+			if (!m_trimVel.Equals(Vec3.zero))
 			{
-				velocity += m_trimVel;
+				m_velocity += m_trimVel;
 				m_trimVel = Vec3.zero;
 			}
-			if (VecX.SqrLength(m_trimPos) > 0)
+			if (!m_trimPos.Equals(Vec3.zero))
 			{
-				position += m_trimPos;
+				Position = m_position + m_trimPos;
 				m_trimPos = Vec3.zero;
-				return true;
 			}
-			return false;
 		}
 
 		internal void SetTrim(Vec3 trimPos, Vec3 trimVel)
@@ -115,6 +153,16 @@ namespace Bubbles
 				m_trimPos = trimPos;
 				m_trimVel = trimVel;
 			}
+		}
+
+		public int CompareTo(Body other)
+		{
+			int dp = m_proxyId - other.m_proxyId;
+			if (dp == 0)
+			{
+				return GetHashCode() - other.GetHashCode();
+			}
+			return dp;
 		}
 
 
